@@ -57,60 +57,90 @@ class PdfController extends Controller
     public function upload(Request $request): JsonResponse
     {
         try {
+            // Phase 2: Validate PDF file
+            $maxSize = env('MAX_PDF_SIZE', 10485760); // 10MB default
+            $maxSizeInKB = $maxSize / 1024;
+            
             $request->validate([
-                'pdf' => ['required', File::types(['pdf'])->max(51200)],
+                'pdf' => [
+                    'required',
+                    'file',
+                    'mimes:pdf',
+                    'max:' . $maxSizeInKB
+                ],
             ]);
 
             $uploadedFile = $request->file('pdf');
+            
+            // Phase 2: Generate filename and store PDF
             $originalName = $uploadedFile->getClientOriginalName();
             $title = Str::replaceFirst('.pdf', '', $originalName);
+            $fileSize = $uploadedFile->getSize();
+            
+            // Store in storage/app/public/pdfs
             $filePath = $uploadedFile->store('pdfs', 'public');
 
+            // Phase 2: Save metadata to database
             $pdf = Pdf::create([
                 'user_id' => Auth::id(),
                 'title' => $title,
                 'original_name' => $originalName,
                 'file_path' => $filePath,
-                'pages' => 0,
-                'meta' => ['processing_status' => 'pending']
+                'size' => $fileSize,
+                'pages' => 0, // Will be updated in Phase 3
+                'status' => 'uploaded', // Phase 2 status
+                'meta' => [
+                    'uploaded_at' => now()->toISOString(),
+                    'phase' => 2
+                ]
             ]);
 
-            Log::info("✅ PDF {$pdf->id} created in database");
+            Log::info("✅ Phase 2: PDF {$pdf->id} uploaded successfully");
+            Log::info("   - File: {$originalName}");
+            Log::info("   - Size: " . number_format($fileSize / 1024, 2) . " KB");
+            Log::info("   - Path: {$filePath}");
 
-            // Upload to Python backend
-            if ($this->usePythonBackend) {
-                try {
-                    Log::info("📤 Uploading PDF {$pdf->id} to Python backend...");
-                    
-                    $pythonPdfId = $this->uploadToPythonAndGetId($pdf);
-                    
-                    if ($pythonPdfId) {
-                        $meta = $pdf->meta ?? [];
-                        $meta['python_pdf_id'] = $pythonPdfId;
-                        $meta['python_upload_time'] = now()->toISOString();
-                        $meta['questions_status'] = 'processing';
-                        $pdf->update(['meta' => $meta]);
-                        
-                        Log::info("✅ PDF {$pdf->id} uploaded. Python ID: {$pythonPdfId}");
-                    }
-                    
-                } catch (\Exception $e) {
-                    Log::error("❌ Python upload failed: " . $e->getMessage());
-                    $meta = $pdf->meta ?? [];
-                    $meta['python_error'] = $e->getMessage();
-                    $meta['questions_status'] = 'failed';
-                    $pdf->update(['meta' => $meta]);
+            // Phase 3: Extract text from PDF
+            try {
+                Log::info("🔍 Phase 3: Starting text extraction for PDF {$pdf->id}");
+                $this->pdfExtractor->extractText($pdf);
+                $pdf->refresh(); // Reload from database
+                
+                if (!empty($pdf->text)) {
+                    $pdf->update(['status' => 'text_extracted']);
+                    Log::info("✅ Phase 3: Text extracted successfully");
+                    Log::info("   - Pages: {$pdf->pages}");
+                    Log::info("   - Text length: " . strlen($pdf->text) . " characters");
+                } else {
+                    Log::warning("⚠️ Phase 3: No text extracted (might be scanned PDF)");
                 }
+            } catch (\Exception $e) {
+                Log::error("❌ Phase 3: Text extraction failed: " . $e->getMessage());
+                // Don't fail the upload, just log the error
             }
 
+            // Phase 2: Return success response
             return response()->json([
                 'success' => true,
-                'message' => 'PDF uploaded successfully. Questions are being generated.',
-                'redirect_url' => route('pdf.show', $pdf),
+                'message' => 'PDF uploaded successfully',
                 'pdf_id' => $pdf->id,
-                'python_pdf_id' => $pdf->meta['python_pdf_id'] ?? null
+                'redirect_url' => route('pdf.show', $pdf),
+                'pdf' => [
+                    'id' => $pdf->id,
+                    'title' => $pdf->title,
+                    'size' => $fileSize,
+                    'status' => $pdf->status
+                ]
             ], 201);
 
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('PDF validation failed: ' . json_encode($e->errors()));
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+            
         } catch (\Exception $e) {
             Log::error('PDF upload failed: ' . $e->getMessage());
             return response()->json([

@@ -22,8 +22,11 @@ class PdfExtractorService
     public function extractText(Pdf $pdf): void
     {
         Log::info("Starting text extraction for PDF: {$pdf->id}");
-        // --- FINAL FIX 1: Use the Storage facade to get the absolute, correct file path ---
-        $fullPath = Storage::disk('public')->path($pdf->file_path);
+        
+        // Build correct absolute path
+        $fullPath = storage_path('app/public/' . $pdf->file_path);
+        
+        Log::info("Looking for PDF at: {$fullPath}");
 
         if (!file_exists($fullPath)) {
             Log::error("PDF file does not exist at path: " . $fullPath);

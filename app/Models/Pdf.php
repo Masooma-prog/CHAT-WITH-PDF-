@@ -16,15 +16,17 @@ class Pdf extends Model
      *
      * @var array<int, string>
      */
-   protected $fillable = [
-    'user_id',
-    'title',
-    'original_name',
-    'file_path',
-    'pages',
-    'text',
-    'meta',  // <-- ADD THIS
-];
+    protected $fillable = [
+        'user_id',
+        'title',
+        'original_name',
+        'file_path',
+        'size',        // Phase 2: File size in bytes
+        'pages',
+        'status',      // Phase 2: Upload status
+        'text',
+        'meta',
+    ];
 
     protected $casts = [
         'meta' => 'array',

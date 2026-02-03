@@ -18,6 +18,8 @@ return new class extends Migration
             $table->string('title')->nullable();
             $table->string('original_name');
             $table->string('file_path');
+            $table->bigInteger('size')->default(0); // File size in bytes
+            $table->string('status')->default('uploaded'); // Phase 2: uploaded, text_extracted, processing, ready
             $table->longText('text')->nullable();
             $table->integer('pages')->default(0);
             $table->json('meta')->nullable(); // THIS WAS MISSING IN YOUR ORIGINAL

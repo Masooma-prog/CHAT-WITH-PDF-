@@ -27,6 +27,9 @@
             align-items: center;
             justify-content: center;
         }
+        .modal-backdrop.hidden {
+            display: none !important;
+        }
         .progress-modal {
             background: white;
             border-radius: 0.75rem;
@@ -235,6 +238,21 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+    // PHASE 2 FIX: Ensure modal is ALWAYS hidden on page load
+    function hideUploadModal() {
+        if (elements.uploadProgressModal) {
+            elements.uploadProgressModal.classList.add('hidden');
+        }
+    }
+    
+    // Hide immediately
+    hideUploadModal();
+    
+    // Hide after delays to catch any auto-triggers
+    setTimeout(hideUploadModal, 50);
+    setTimeout(hideUploadModal, 100);
+    setTimeout(hideUploadModal, 500);
 
     // ========== UPLOAD HANDLING WITH PROGRESS ==========
     
