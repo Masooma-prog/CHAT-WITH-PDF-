@@ -19,8 +19,9 @@ pdfplumber==0.11.0
 # Image Processing (newer version that installs easier)
 Pillow>=10.0.0
 
-# Machine Learning & Embeddings (Phase 6)
-sentence-transformers==2.2.2
+# Machine Learning & Embeddings (Phase 6) - Python 3.13 compatible
+transformers==4.36.0
+torch==2.1.2
 
 # Vector Database (Phase 7)
 faiss-cpu==1.7.4

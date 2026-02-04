@@ -12,7 +12,8 @@ import uvicorn
 import os
 from dotenv import load_dotenv
 from chunker import TextChunker
-from embeddings import get_embedding_generator, generate_embeddings_batch
+from embeddings import get_embedding_generator, generate_embeddings_batch, generate_embedding
+from vector_store import get_vector_store
 import json
 import uuid
 
@@ -45,12 +46,22 @@ chunker = TextChunker(chunk_size=1000, overlap=100)
 # Phase 6: Initialize embedding generator (lazy loading)
 embedding_generator = None
 
+# Phase 7: Initialize vector store (lazy loading to avoid startup hang)
+vector_store = None
+
 def get_embeddings():
     """Get or initialize embedding generator."""
     global embedding_generator
     if embedding_generator is None:
         embedding_generator = get_embedding_generator()
     return embedding_generator
+
+def get_vector_store_instance():
+    """Get or initialize vector store (lazy loading)."""
+    global vector_store
+    if vector_store is None:
+        vector_store = get_vector_store()
+    return vector_store
 
 # ========== PHASE 4: BASIC ENDPOINTS ==========
 
@@ -235,7 +246,7 @@ class ChunkTextRequest(BaseModel):
 @app.post("/api/chunk-text", response_model=UploadResponse)
 async def chunk_text_endpoint(request: ChunkTextRequest):
     """
-    Phase 5-6: Receive text from Laravel, chunk it, and generate embeddings
+    Phase 5-7: Receive text from Laravel, chunk it, generate embeddings, and save to FAISS
     """
     try:
         pdf_id = request.pdf_id
@@ -259,7 +270,15 @@ async def chunk_text_endpoint(request: ChunkTextRequest):
         
         print(f"✅ Phase 6: Generated {len(embeddings)} embeddings")
         
-        # Store in memory
+        # Phase 7: Save to FAISS vector store
+        print(f"💾 Phase 7: Saving to vector store...")
+        vs = get_vector_store_instance()
+        success = vs.add_pdf(pdf_id, chunks, embeddings)
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to save to vector store")
+        
+        # Also keep in memory for backward compatibility
         pdf_storage[pdf_id] = {
             'filename': request.filename,
             'text': text,
@@ -269,14 +288,15 @@ async def chunk_text_endpoint(request: ChunkTextRequest):
                 'uploaded_at': str(uuid.uuid4()),
                 'chunk_stats': chunk_stats,
                 'embeddings_generated': True,
-                'embedding_dimension': len(embeddings[0]) if embeddings else 0
+                'embedding_dimension': len(embeddings[0]) if embeddings else 0,
+                'saved_to_faiss': success
             }
         }
         
         return UploadResponse(
             success=True,
             pdf_id=pdf_id,
-            message=f"Text chunked and embedded successfully. {len(chunks)} chunks with embeddings created.",
+            message=f"Text chunked, embedded, and saved to vector store. {len(chunks)} chunks created.",
             chunks_count=len(chunks),
             chunk_stats=chunk_stats
         )
@@ -379,7 +399,7 @@ async def generate_embeddings_endpoint(request: EmbeddingRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ========== PHASE 7: VECTOR SEARCH (PLACEHOLDER) ==========
+# ========== PHASE 7: VECTOR SEARCH ==========
 
 class SearchRequest(BaseModel):
     query: str
@@ -395,13 +415,30 @@ class SearchResponse(BaseModel):
 async def search_similar(request: SearchRequest):
     """
     Phase 7: Search for similar text chunks using vector similarity
-    This will be implemented in Phase 7
     """
-    return SearchResponse(
-        success=False,
-        results=[],
-        message="Phase 7: Not yet implemented"
-    )
+    try:
+        # Generate embedding for query
+        query_embedding = generate_embedding(request.query)
+        
+        # Search in vector store
+        vs = get_vector_store_instance()
+        results = vs.search(request.pdf_id, query_embedding, request.top_k)
+        
+        if not results:
+            return SearchResponse(
+                success=False,
+                results=[],
+                message=f"No results found for PDF {request.pdf_id}"
+            )
+        
+        return SearchResponse(
+            success=True,
+            results=results,
+            message=f"Found {len(results)} similar chunks"
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ========== PHASE 8-9: RAG CHAT (PLACEHOLDER) ==========
 

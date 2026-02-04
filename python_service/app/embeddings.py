@@ -1,28 +1,38 @@
-# Phase 6: Embeddings Module
-# Converts text into vector embeddings for semantic search
+# Phase 6: Embeddings Module (HuggingFace Transformers - Python 3.13 Compatible)
+# Converts text into vector embeddings using transformers directly
 
-from sentence_transformers import SentenceTransformer
-from typing import List, Union
+from transformers import AutoTokenizer, AutoModel
+import torch
+from typing import List
 import numpy as np
+
+# Configuration
+MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+EMBEDDING_DIMENSION = 384
 
 class EmbeddingGenerator:
     """
-    Generates embeddings using Sentence-BERT model.
-    Embeddings are vector representations that capture semantic meaning.
+    Generates embeddings using HuggingFace transformers.
+    Direct implementation without sentence-transformers library.
     """
     
-    def __init__(self, model_name: str = 'all-MiniLM-L6-v2'):
-        """
-        Initialize the embedding model.
+    def __init__(self):
+        """Initialize the model and tokenizer."""
+        print(f"📥 Loading embedding model: {MODEL_NAME}")
+        print("   (First time will download ~90MB)")
         
-        Args:
-            model_name: Name of the sentence-transformers model
-                       'all-MiniLM-L6-v2' - Fast, 384 dimensions, good quality
-        """
-        print(f"Loading embedding model: {model_name}...")
-        self.model = SentenceTransformer(model_name)
-        self.dimension = self.model.get_sentence_embedding_dimension()
+        self.tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+        self.model = AutoModel.from_pretrained(MODEL_NAME)
+        self.model.eval()  # Set to evaluation mode
+        self.dimension = EMBEDDING_DIMENSION
+        
         print(f"✅ Model loaded. Embedding dimension: {self.dimension}")
+    
+    def _mean_pooling(self, model_output, attention_mask):
+        """Mean pooling to get sentence embeddings."""
+        token_embeddings = model_output[0]
+        input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+        return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
     
     def generate_embedding(self, text: str) -> List[float]:
         """
@@ -35,14 +45,22 @@ class EmbeddingGenerator:
             List of floats representing the embedding vector
         """
         if not text or not text.strip():
-            # Return zero vector for empty text
             return [0.0] * self.dimension
         
-        # Generate embedding
-        embedding = self.model.encode(text, convert_to_numpy=True)
+        # Tokenize
+        encoded_input = self.tokenizer([text], padding=True, truncation=True, return_tensors='pt', max_length=512)
         
-        # Convert to list for JSON serialization
-        return embedding.tolist()
+        # Generate embeddings
+        with torch.no_grad():
+            model_output = self.model(**encoded_input)
+        
+        # Mean pooling
+        embeddings = self._mean_pooling(model_output, encoded_input['attention_mask'])
+        
+        # Normalize
+        embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
+        
+        return embeddings[0].numpy().tolist()
     
     def generate_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
         """
@@ -60,62 +78,24 @@ class EmbeddingGenerator:
         # Filter out empty texts
         valid_texts = [t if t and t.strip() else " " for t in texts]
         
-        # Generate embeddings in batch (much faster)
-        embeddings = self.model.encode(valid_texts, convert_to_numpy=True, show_progress_bar=True)
+        print(f"📊 Generating embeddings for {len(valid_texts)} texts...")
         
-        # Convert to list of lists
-        return embeddings.tolist()
-    
-    def compute_similarity(self, embedding1: List[float], embedding2: List[float]) -> float:
-        """
-        Compute cosine similarity between two embeddings.
+        # Tokenize all texts
+        encoded_input = self.tokenizer(valid_texts, padding=True, truncation=True, return_tensors='pt', max_length=512)
         
-        Args:
-            embedding1: First embedding vector
-            embedding2: Second embedding vector
-            
-        Returns:
-            Similarity score between -1 and 1 (higher = more similar)
-        """
-        # Convert to numpy arrays
-        vec1 = np.array(embedding1)
-        vec2 = np.array(embedding2)
+        # Generate embeddings
+        with torch.no_grad():
+            model_output = self.model(**encoded_input)
         
-        # Compute cosine similarity
-        dot_product = np.dot(vec1, vec2)
-        norm1 = np.linalg.norm(vec1)
-        norm2 = np.linalg.norm(vec2)
+        # Mean pooling
+        embeddings = self._mean_pooling(model_output, encoded_input['attention_mask'])
         
-        if norm1 == 0 or norm2 == 0:
-            return 0.0
+        # Normalize
+        embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
         
-        return float(dot_product / (norm1 * norm2))
-    
-    def find_most_similar(self, query_embedding: List[float], 
-                         candidate_embeddings: List[List[float]], 
-                         top_k: int = 5) -> List[tuple]:
-        """
-        Find most similar embeddings to a query.
+        print(f"✅ Generated {len(embeddings)} embeddings")
         
-        Args:
-            query_embedding: Query vector
-            candidate_embeddings: List of candidate vectors
-            top_k: Number of top results to return
-            
-        Returns:
-            List of (index, similarity_score) tuples, sorted by similarity
-        """
-        similarities = []
-        
-        for idx, candidate in enumerate(candidate_embeddings):
-            similarity = self.compute_similarity(query_embedding, candidate)
-            similarities.append((idx, similarity))
-        
-        # Sort by similarity (descending)
-        similarities.sort(key=lambda x: x[1], reverse=True)
-        
-        # Return top k
-        return similarities[:top_k]
+        return embeddings.numpy().tolist()
 
 
 # Global embedding generator instance
@@ -124,7 +104,7 @@ _embedding_generator = None
 def get_embedding_generator() -> EmbeddingGenerator:
     """
     Get or create the global embedding generator instance.
-    Singleton pattern to avoid loading model multiple times.
+    Singleton pattern.
     """
     global _embedding_generator
     if _embedding_generator is None:
@@ -143,9 +123,3 @@ def generate_embeddings_batch(texts: List[str]) -> List[List[float]]:
     """Generate embeddings for multiple texts."""
     generator = get_embedding_generator()
     return generator.generate_embeddings_batch(texts)
-
-
-def compute_similarity(embedding1: List[float], embedding2: List[float]) -> float:
-    """Compute similarity between two embeddings."""
-    generator = get_embedding_generator()
-    return generator.compute_similarity(embedding1, embedding2)
