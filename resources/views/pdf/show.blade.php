@@ -98,9 +98,9 @@
             <div class="flex items-center justify-between mb-2">
                 <h2 class="text-lg font-semibold text-gray-900">Recent PDFs</h2>
             </div>
-            <!-- Comparison Mode Toggle -->
+            <!-- Comparison Mode Toggle / Exit Button -->
             <button id="toggleCompareMode" class="w-full mt-2 px-3 py-2 text-sm bg-gradient-to-r from-purple-50 to-purple-100 hover:from-purple-100 hover:to-purple-200 text-purple-700 rounded-lg border border-purple-200 transition-all flex items-center justify-center gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                <svg id="compareModeIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
                 <span id="compareModeText">Compare Mode</span>
             </button>
             <div id="compareInfo" class="hidden mt-2 p-2 bg-purple-50 rounded text-xs text-purple-700 border border-purple-200">
@@ -135,14 +135,16 @@
                     <h2 id="pdfTitle" class="text-lg font-semibold text-gray-900 truncate">Select a PDF</h2>
                     <span id="processingBadge" class="status-badge hidden"></span>
                 </div>
-                <div id="pdfControls" style="display: none;" class="flex items-center space-x-2">
-                    <button id="prevPage" class="p-2 text-gray-600 hover:text-gray-800">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-                    </button>
-                    <span id="pageInfo" class="text-sm text-gray-600"></span>
-                    <button id="nextPage" class="p-2 text-gray-600 hover:text-gray-800">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                    </button>
+                <div class="flex items-center gap-2">
+                    <div id="pdfControls" style="display: none;" class="flex items-center space-x-2">
+                        <button id="prevPage" class="p-2 text-gray-600 hover:text-gray-800">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                        </button>
+                        <span id="pageInfo" class="text-sm text-gray-600"></span>
+                        <button id="nextPage" class="p-2 text-gray-600 hover:text-gray-800">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -567,7 +569,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const li = document.createElement('li');
                 li.className = 'relative';
                 
-                if (isCompareMode) {
+                // Only show checkboxes if in compare mode AND not currently viewing a comparison
+                if (isCompareMode && currentPdfId !== 'compare') {
                     // Comparison mode: show checkboxes
                     const label = document.createElement('label');
                     label.className = 'flex items-center px-4 py-2 cursor-pointer hover:bg-gray-200 rounded-lg transition-colors text-sm';
@@ -1047,6 +1050,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Toggle comparison mode
     elements.toggleCompareMode.addEventListener('click', () => {
+        // If we're on a comparison page, exit to home
+        if (currentPdfId === 'compare') {
+            window.location.href = '/';
+            return;
+        }
+        
         isCompareMode = !isCompareMode;
         
         if (isCompareMode) {
@@ -1104,7 +1113,17 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('splitPdfViewer').classList.remove('hidden');
             document.getElementById('splitPdfViewer').classList.add('flex');
             
-            elements.pdfTitle.textContent = `Comparing: ${pdf1Data.title} vs ${pdf2Data.title}`;
+            // Update title with "Combined" format
+            elements.pdfTitle.textContent = `Combined: ${pdf1Data.title} + ${pdf2Data.title}`;
+            
+            // Change sidebar button to "Exit Comparison"
+            elements.compareModeText.textContent = 'Exit Comparison';
+            elements.toggleCompareMode.classList.remove('from-purple-50', 'to-purple-100', 'text-purple-700');
+            elements.toggleCompareMode.classList.add('from-red-50', 'to-red-100', 'text-red-700', 'border-red-200');
+            const icon = document.getElementById('compareModeIcon');
+            if (icon) {
+                icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>';
+            }
             
             await loadSplitPdfs();
             

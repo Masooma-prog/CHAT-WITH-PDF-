@@ -251,17 +251,31 @@ class ChatController extends Controller
             // Sort PDF IDs for consistent session
             sort($pdfIds);
             
-            // Get or create comparison session (simplified - no meta column needed)
-            $session = ChatSession::firstOrCreate(
-                [
+            // Create a unique identifier for this comparison
+            $comparisonKey = implode('-', $pdfIds);
+            $sessionTitle = "Combined: {$pdfs[0]->title} + {$pdfs[1]->title}";
+            
+            // Get or create comparison session
+            // Use pdf_id as the first PDF and title to identify comparison sessions
+            $session = ChatSession::where('user_id', Auth::id())
+                ->where('pdf_id', $pdfs->first()->id)
+                ->where('title', 'LIKE', 'Combined:%')
+                ->first();
+            
+            if (!$session) {
+                $session = ChatSession::create([
                     'user_id' => Auth::id(),
                     'pdf_id' => $pdfs->first()->id,
-                    'title' => "Comparing: {$pdfs[0]->title} vs {$pdfs[1]->title}"
-                ],
-                [
+                    'title' => $sessionTitle,
                     'last_message_at' => now()
-                ]
-            );
+                ]);
+            } else {
+                // Update title in case PDF names changed
+                $session->update([
+                    'title' => $sessionTitle,
+                    'last_message_at' => now()
+                ]);
+            }
 
             // Save user message
             ChatMessage::create([
