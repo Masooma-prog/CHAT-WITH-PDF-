@@ -1,0 +1,74 @@
+[
+  {
+    "chunk_id": 0,
+    "text": "Task No: Task Wise Marks Documentation Marks Total Marks (20) Assigned Obtained Assigned Obtained 1 3 5 2 3 3 3 4 3 5 3 Web – Engineering - Lab (Spring-2026) Teacher: Engr. SUBAS BILAL Bahria University, Islamabad Department of Software Engineering Student : Lotfullah Muslimwal Enrollment : 01-131232-039 Lab Journal: 02 Date: 02/03/2026 Comments: Signature Student Name: Lotfullah Muslimwal Web Engineering - Lab Engr. SUBAS BILAL Enrollment Number: 01-131232-039 Lab # 02 Dept of SE, BUIC 2 Lab No: 02 - Lab Title: Working with HTML 5 Introduction Implemented the basic tags in the HTML5 inside the VS Code Tools Used VS Code Task 1: Code <!DOCTYPE html> <html lang=\"en\"> <head> <meta charset=\"UTF-8\" /> <meta name=\"viewport\" content=\"width=device -width, initial-scale=1.0\" /> <title>Task 1</title> </head> <body> <h1>Famous Cities</h1> <section> <h2>London</h2> <p> London is the capital city of England.",
+    "char_count": 909,
+    "word_count": 137,
+    "pdf_id": "24",
+    "position": 0
+  },
+  {
+    "chunk_id": 1,
+    "text": "It is the most populous city in the United Kingdom, with a metropolitan area of over 13 million inhabitants. </p> <h2>Paris</h2> <p>Paris is the capital and most populous city of France.</p> <h2>Tokyo</h2> <p> Tokyo is the capital of Japan, the center of the Greater Tokyo Area, and the most populous metropolitan area in the world. </p> </section> </body> </html> Student Name: Lotfullah Muslimwal Web Engineering - Lab Engr.",
+    "char_count": 426,
+    "word_count": 68,
+    "pdf_id": "24",
+    "position": 1
+  },
+  {
+    "chunk_id": 2,
+    "text": "</p> </section> </body> </html> Student Name: Lotfullah Muslimwal Web Engineering - Lab Engr. SUBAS BILAL Enrollment Number: 01-131232-039 Lab # 02 Dept of SE, BUIC 3 Screenshot Task 2: Code <!DOCTYPE html> <html lang=\"en\"> <head> <meta charset=\"UTF-8\" /> <meta name=\"viewport\" content= \"width=device-width, initial-scale=1.0\" /> <title>Feedback Form</title> </head> <body> <div> <h1>Feedback Form</h1> </div> <form method=\"POST\" action=\"http://www.bahria.com\"> <div> <fieldset> <legend>Personal Information</legend> <div> <label for=\"name\">Name:</label> <input type=\"text\" id=\"name\" name=\"name\" required /> </div> <br /> <div> <label for=\"email\">E-mail:</label> <input type=\"email\" id=\"email\" name=\"email\" required /> </div> </fieldset> </div> <br /> <div> <fieldset> <legend>What did you like most about the campus?</legend> <div> Student Name: Lotfullah Muslimwal Web Engineering - Lab Engr.",
+    "char_count": 894,
+    "word_count": 105,
+    "pdf_id": "24",
+    "position": 2
+  },
+  {
+    "chunk_id": 3,
+    "text": "SUBAS BILAL Enrollment Number: 01-131232-039 Lab # 02 Dept of SE, BUIC 4 <input type=\"checkbox\" id=\"campus\" name=\"likes\" value=\"campus\" /> <label for=\"campus\">Campus</label> </div> <div> <input type=\"checkbox\" id=\"students\" name=\"likes\" value=\"students\" /> <label for=\"students\">Students</label> </div> <div> <input type=\"checkbox\" id=\"location\" name=\"likes\" value=\"location\" /> <label for=\"location\">Location</label> </div> <div> <input type=\"checkbox\" id=\"atmosphere\" name=\"likes\" value=\"atmosphere\" /> <label for=\"atmosphere\">Atmosphere</label> </div> <div> <input type=\"checkbox\" id=\"dorm\" name=\"likes\" value=\"dorm_rooms\" /> <label for=\"dorm\">Dorm Rooms</label> </div> <div> <input type=\"checkbox\" id=\"sports\" name=\"likes\" value=\"sports\" /> <label for=\"sports\">Sports</label> </div> </fieldset> </div> <br /> <div> <fieldset> <legend>How did you become interested in the college?</legend> <div> <input type=\"radio\" id=\"friends\" name=\"interest\" value=\"friends\" /> <label for=\"friends\">Friends</label> Student Name: Lotfullah Muslimwal Web Engineering - Lab Engr.",
+    "char_count": 1065,
+    "word_count": 105,
+    "pdf_id": "24",
+    "position": 3
+  },
+  {
+    "chunk_id": 4,
+    "text": "SUBAS BILAL Enrollment Number: 01-131232-039 Lab # 02 Dept of SE, BUIC 5 </div> <div> <input type=\"radio\" id=\"television\" name=\"interest\" value=\"television\" /> <label for=\"television\">Television</label> </div> <div> <input type=\"radio\" id=\"internet\" name=\"interest\" value=\"internet\" /> <label for=\"internet\">Internet</label> </div> <div> <input type=\"radio\" id=\"other\" name=\"interest\" value=\"other\" /> <label for=\"other\">Other</label> </div> </fieldset> </div> <br /> <div> <fieldset> <legend>Additional Comments</legend> <textarea name=\"comments\" rows=\"5\" cols=\"40\"></textarea> </fieldset> </div> <br /> <div> <button type=\"submit\">Submit</button> <button type=\"reset\">Reset</button> </div> </form> </body> </html> Student Name: Lotfullah Muslimwal Web Engineering - Lab Engr. SUBAS BILAL Enrollment Number: 01-131232-039 Lab # 02 Dept of SE, BUIC 6 Screenshot Student Name: Lotfullah Muslimwal Web Engineering - Lab Engr.",
+    "char_count": 923,
+    "word_count": 101,
+    "pdf_id": "24",
+    "position": 4
+  },
+  {
+    "chunk_id": 5,
+    "text": "SUBAS BILAL Enrollment Number: 01-131232-039 Lab # 02 Dept of SE, BUIC 7 Task 3: Code <!DOCTYPE html> <html lang=\"en\"> <head> <meta charset=\"UTF-8\" /> <meta name=\"viewport\" content=\"width=device -width, initial-scale=1.0\" /> <title>Kindergarten Fun Page</title> </head> <body> <header> <h1>Welcome to Kindergarten Fun Page</h1> <p>Learn and have fun with songs and rhymes!</p> </header> <section> <h2>National Anthem</h2> <audio controls> <source src=\"anthem.mp3\" type=\"audio/mpeg\" /> Your browser does not support the audio element.",
+    "char_count": 533,
+    "word_count": 67,
+    "pdf_id": "24",
+    "position": 5
+  },
+  {
+    "chunk_id": 6,
+    "text": "</audio> </section> <section> <h2>Famous Rhymes Videos</h2> <figure> <iframe width=\"320\" height=\"240\" src=\"https://www.youtube.com/embed/yCjJyiqpAuU\" title=\"Twinkle Twinkle Little Star\" frameborder=\"0\" allowfullscreen ></iframe> <figcaption>Twinkle Twinkle Little Star</figcaption> </figure> <figure> <iframe width=\"320\" height=\"240\" src=\"https://www.youtube.com/embed/nrv495corBc\" title=\"Humpty Dumpty\" frameborder=\"0\" allowfullscreen ></iframe> <figcaption>Humpty Dumpty</figcaption> </figure> <figure> <iframe width=\"320\" height=\"240\" src=\"https://www.youtube.com/embed/CRHvTTOR8Ns\" title=\"Baa Baa Black Sheep\" frameborder=\"0\" allowfullscreen ></iframe> Student Name: Lotfullah Muslimwal Web Engineering - Lab Engr.",
+    "char_count": 718,
+    "word_count": 57,
+    "pdf_id": "24",
+    "position": 6
+  },
+  {
+    "chunk_id": 7,
+    "text": "SUBAS BILAL Enrollment Number: 01-131232-039 Lab # 02 Dept of SE, BUIC 8 <figcaption>Baa Baa Black Sheep</figcaption> </figure> <figure> <iframe width=\"320\" height=\"240\" src=\"https://www.youtube.com/embed/FYojUSFfuMg\" title=\"Jack and Jill\" frameborder=\"0\" allowfullscreen ></iframe> <figcaption>Jack and Jill</figcaption> </figure> <figure> <iframe width=\"320\" height=\"240\" src=\"https://www.youtube.com/embed/CkRdvGmcCBE\" title=\"Mary Had a Little Lamb\" frameborder=\"0\" allowfullscreen ></iframe> <figcaption>Mary Had a Little Lamb</figcaption> </figure> </section> <section> <h2>Contact Us</h2> <p>Send us an email by clicking the image below:</p> <a href=\"mailto:lotfullahmsl@gmail.com\"> <img src=\"foremail.jpg\" alt=\"Click here to send us an email\" width=\"100\" height=\"100\" /> </a> </section> <footer> <p>Kindergarten Fun Page &copy; 2026</p> <p>Learning made fun for kids!</p> </footer> </body> </html> Student Name: Lotfullah Muslimwal Web Engineering - Lab Engr.",
+    "char_count": 966,
+    "word_count": 104,
+    "pdf_id": "24",
+    "position": 7
+  },
+  {
+    "chunk_id": 8,
+    "text": "SUBAS BILAL Enrollment Number: 01-131232-039 Lab # 02 Dept of SE, BUIC 9 Screenshot Student Name: Lotfullah Muslimwal Web Engineering - Lab Engr. SUBAS BILAL Enrollment Number: 01-131232-039 Lab # 02 Dept of SE, BUIC 10",
+    "char_count": 219,
+    "word_count": 36,
+    "pdf_id": "24",
+    "position": 8
+  }
+]

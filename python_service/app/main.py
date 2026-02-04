@@ -519,15 +519,15 @@ async def generate_questions(request: QuestionGenerationRequest):
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat_with_pdf(request: ChatRequest):
     """
-    Phase 8: Chat with PDF using LOCAL RAG (No external APIs)
+    Phase 8: Chat with PDF using SMART RAG with Groq LLM
     
     Flow:
     1. Generate embedding for user's question
     2. Search vector store for relevant chunks
-    3. Return chunks as answer (pure RAG)
+    3. Use Groq LLM to generate intelligent answer
     """
     try:
-        from rag_local import generate_extractive_answer
+        from rag_local import generate_smart_answer_with_groq
         
         print(f"💬 Chat request for PDF {request.pdf_id}")
         print(f"   Question: {request.question}")
@@ -544,15 +544,15 @@ async def chat_with_pdf(request: ChatRequest):
                 success=False,
                 answer="",
                 sources=[],
-                model="local_rag",
+                model="none",
                 tokens_used=0,
                 message=f"No content found for PDF {request.pdf_id}"
             )
         
         print(f"   Found {len(similar_chunks)} relevant chunks")
         
-        # Step 3: Generate answer using LOCAL RAG (no API)
-        rag_result = generate_extractive_answer(
+        # Step 3: Generate smart answer using Groq
+        rag_result = generate_smart_answer_with_groq(
             question=request.question,
             context_chunks=similar_chunks
         )
@@ -563,10 +563,10 @@ async def chat_with_pdf(request: ChatRequest):
         return ChatResponse(
             success=True,
             answer=rag_result["answer"],
-            sources=similar_chunks,
-            model=rag_result["method"],
-            tokens_used=0,  # No tokens used (local processing)
-            message="Answer generated using local RAG (no external API)"
+            sources=similar_chunks[:3],  # Return top 3 sources
+            model=rag_result.get("model", "groq_rag"),
+            tokens_used=rag_result.get("tokens_used", 0),
+            message="Answer generated using Groq LLM"
         )
         
     except Exception as e:

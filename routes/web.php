@@ -34,6 +34,7 @@ Route::middleware(['auth'])->group(function () {
     // Chat functionality
     Route::post('/chat/{pdf}', [ChatController::class, 'ask'])->name('chat.ask');
     Route::get('/chat/{pdf}/history', [ChatController::class, 'history'])->name('chat.history');
+    Route::post('/chat/{pdf}/clear', [ChatController::class, 'clearHistory'])->name('chat.clear');
     Route::get('/chat/sessions', [ChatController::class, 'sessions'])->name('chat.sessions');
     
     // Test endpoint

@@ -156,6 +156,40 @@ class ChatController extends Controller
     }
 
     /**
+     * Clear chat history for a PDF
+     */
+    public function clearHistory(Pdf $pdf): JsonResponse
+    {
+        try {
+            if ($pdf->user_id !== Auth::id()) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+            }
+
+            $session = ChatSession::where('user_id', Auth::id())
+                ->where('pdf_id', $pdf->id)
+                ->first();
+
+            if ($session) {
+                // Delete all messages in this session
+                $session->messages()->delete();
+                // Delete the session itself
+                $session->delete();
+                
+                Log::info("Cleared chat history for PDF {$pdf->id}");
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Chat history cleared'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error("Error clearing history: " . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error clearing history'], 500);
+        }
+    }
+
+    /**
      * Get all chat sessions for current user
      */
     public function sessions(): JsonResponse

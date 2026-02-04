@@ -185,6 +185,42 @@
         </div>
 
         <div class="p-4 border-t border-gray-200">
+            <!-- Quick Action Buttons -->
+            <div id="quickActionsContainer" class="hidden mb-3">
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="text-xs text-gray-500 font-medium">Quick Actions:</span>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button class="quick-action-btn px-3 py-1.5 text-xs bg-gradient-to-r from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 text-blue-700 rounded-lg border border-blue-200 transition-all" data-question="Summarize this document in 3-4 sentences">
+                        <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        Summarize
+                    </button>
+                    <button class="quick-action-btn px-3 py-1.5 text-xs bg-gradient-to-r from-purple-50 to-purple-100 hover:from-purple-100 hover:to-purple-200 text-purple-700 rounded-lg border border-purple-200 transition-all" data-question="What are the key points or main ideas?">
+                        <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                        Key Points
+                    </button>
+                    <button class="quick-action-btn px-3 py-1.5 text-xs bg-gradient-to-r from-green-50 to-green-100 hover:from-green-100 hover:to-green-200 text-green-700 rounded-lg border border-green-200 transition-all" data-question="Explain this in simple terms">
+                        <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+                        Explain
+                    </button>
+                    <button class="quick-action-btn px-3 py-1.5 text-xs bg-gradient-to-r from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 text-orange-700 rounded-lg border border-orange-200 transition-all" data-question="What are the important details I should know?">
+                        <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        Details
+                    </button>
+                    <button class="quick-action-btn px-3 py-1.5 text-xs bg-gradient-to-r from-pink-50 to-pink-100 hover:from-pink-100 hover:to-pink-200 text-pink-700 rounded-lg border border-pink-200 transition-all" data-question="What questions should I ask about this?">
+                        <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        Questions
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between mb-2">
+                <button id="clearHistoryBtn" class="hidden text-xs text-gray-500 hover:text-red-600 flex items-center gap-1" title="Clear chat history">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    Clear history
+                </button>
+                <span id="messageCount" class="hidden text-xs text-gray-400"></span>
+            </div>
             <div class="flex space-x-2">
                 <input type="text" id="chatInput" placeholder="Ask a question..." class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" disabled>
                 <button id="sendMessage" class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg" disabled>
@@ -231,6 +267,9 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshQuestionsBtn: document.getElementById('refreshQuestionsBtn'),
         chatStatus: document.getElementById('chatStatus'),
         uploadProgressModal: document.getElementById('uploadProgressModal'),
+        clearHistoryBtn: document.getElementById('clearHistoryBtn'),
+        messageCount: document.getElementById('messageCount'),
+        quickActionsContainer: document.getElementById('quickActionsContainer'),
         uploadProgressBar: document.getElementById('uploadProgressBar'),
         uploadProgressMessage: document.getElementById('uploadProgressMessage'),
         uploadProgressPercent: document.getElementById('uploadProgressPercent'),
@@ -505,7 +544,11 @@ document.addEventListener('DOMContentLoaded', () => {
             renderPage(currentPageNum);
             elements.chatInput.disabled = false;
             elements.sendMessage.disabled = false;
+            elements.quickActionsContainer.classList.remove('hidden');
             fetchPredefinedQuestions(pdf.id);
+            
+            // Load chat history for this PDF
+            await loadChatHistory(pdf.id);
         } catch (error) {
             console.error('Error loading PDF:', error);
             elements.pdfTitle.textContent = 'Error loading PDF';
@@ -625,6 +668,65 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.chatMessages.parentElement.scrollTop = elements.chatMessages.parentElement.scrollHeight;
     }
 
+    async function loadChatHistory(pdfId) {
+        try {
+            const response = await fetch(`/chat/${pdfId}/history`, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                }
+            });
+
+            if (!response.ok) {
+                console.warn('Failed to load chat history:', response.status);
+                return;
+            }
+
+            const data = await response.json();
+            
+            if (data.success && data.messages && data.messages.length > 0) {
+                console.log(`Loading ${data.messages.length} previous messages`);
+                
+                // Clear existing messages except welcome message
+                while (elements.chatMessages.children.length > 1) {
+                    elements.chatMessages.removeChild(elements.chatMessages.lastChild);
+                }
+                
+                // Add all previous messages
+                data.messages.forEach(msg => {
+                    appendMessage(msg.role === 'user' ? 'user' : 'bot', msg.message);
+                });
+                
+                // Show message count and clear button
+                const userMessages = data.messages.filter(m => m.role === 'user').length;
+                elements.messageCount.textContent = `${userMessages} question${userMessages !== 1 ? 's' : ''} asked`;
+                elements.messageCount.classList.remove('hidden');
+                elements.clearHistoryBtn.classList.remove('hidden');
+                
+                console.log('Chat history loaded successfully');
+            } else {
+                console.log('No previous chat history found');
+                elements.messageCount.classList.add('hidden');
+                elements.clearHistoryBtn.classList.add('hidden');
+            }
+        } catch (error) {
+            console.error('Error loading chat history:', error);
+        }
+    }
+
+    function updateMessageCount() {
+        // Count user messages (excluding welcome message)
+        const userMessages = Array.from(elements.chatMessages.children)
+            .filter(msg => msg.classList.contains('justify-end')).length;
+        
+        if (userMessages > 0) {
+            elements.messageCount.textContent = `${userMessages} question${userMessages !== 1 ? 's' : ''} asked`;
+            elements.messageCount.classList.remove('hidden');
+            elements.clearHistoryBtn.classList.remove('hidden');
+        }
+    }
+
     function resetChatUI(pdfTitle = null) {
         while (elements.chatMessages.children.length > 1) {
             elements.chatMessages.removeChild(elements.chatMessages.lastChild);
@@ -634,6 +736,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         elements.chatInput.disabled = true;
         elements.sendMessage.disabled = true;
+        elements.quickActionsContainer.classList.add('hidden');
         elements.predefinedQuestions.innerHTML = '<p class="text-xs text-gray-400 w-full text-center">Select a PDF to see questions.</p>';
         elements.processingBadge.classList.add('hidden');
         elements.refreshQuestionsBtn.classList.add('hidden');
@@ -673,6 +776,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (data.answer) {
                 appendMessage('bot', data.answer);
+                
+                // Update message count and show clear button
+                updateMessageCount();
             } else {
                 console.error('No answer in response:', data);
                 appendMessage('bot', 'Sorry, I received an invalid response. Please try again.');
@@ -690,6 +796,53 @@ document.addEventListener('DOMContentLoaded', () => {
     
     elements.chatInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter' && !elements.sendMessage.disabled) elements.sendMessage.click();
+    });
+
+    // Clear chat history button
+    elements.clearHistoryBtn.addEventListener('click', async () => {
+        if (!currentPdfId) return;
+        
+        if (!confirm('Are you sure you want to clear the chat history for this PDF? This cannot be undone.')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/chat/${currentPdfId}/clear`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Accept': 'application/json'
+                }
+            });
+            
+            if (response.ok) {
+                // Clear UI
+                while (elements.chatMessages.children.length > 1) {
+                    elements.chatMessages.removeChild(elements.chatMessages.lastChild);
+                }
+                elements.messageCount.classList.add('hidden');
+                elements.clearHistoryBtn.classList.add('hidden');
+                
+                console.log('Chat history cleared');
+            } else {
+                alert('Failed to clear chat history. Please try again.');
+            }
+        } catch (error) {
+            console.error('Error clearing history:', error);
+            alert('Error clearing chat history. Please try again.');
+        }
+    });
+
+    // Quick action buttons
+    document.querySelectorAll('.quick-action-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const question = btn.getAttribute('data-question');
+            if (question && !elements.sendMessage.disabled) {
+                elements.chatInput.value = question;
+                elements.sendMessage.click();
+            }
+        });
     });
 
     // ========== PDF NAVIGATION ==========
