@@ -2,80 +2,60 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ChatSession extends Model
 {
-    use HasFactory;
-
     protected $fillable = [
+        'user_id',
         'pdf_id',
         'title',
+        'last_message_at'
     ];
 
     protected $casts = [
-        'pdf_id' => 'integer',
+        'last_message_at' => 'datetime'
     ];
 
-    /**
-     * Get the PDF associated with this session
-     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
     public function pdf(): BelongsTo
     {
         return $this->belongsTo(Pdf::class);
     }
 
-    /**
-     * Get all messages in this session
-     */
     public function messages(): HasMany
     {
-        return $this->hasMany(ChatMessage::class, 'session_id')->orderBy('created_at');
+        return $this->hasMany(ChatMessage::class, 'session_id');
     }
 
     /**
-     * Get the latest message in this session
+     * Get the latest messages
      */
-    public function latestMessage(): HasMany
+    public function latestMessages(int $limit = 10)
     {
-        return $this->messages()->latest();
+        return $this->messages()->latest()->limit($limit)->get()->reverse()->values();
     }
 
     /**
-     * Add a message to this session
+     * Auto-generate title from first question
      */
-    public function addMessage(string $sender, string $message, array $meta = []): ChatMessage
+    public function generateTitle(): void
     {
-        return $this->messages()->create([
-            'sender' => $sender,
-            'message' => $message,
-            'meta' => $meta,
-        ]);
-    }
-
-    /**
-     * Get message count for this session
-     */
-    public function getMessageCountAttribute(): int
-    {
-        return $this->messages()->count();
-    }
-
-    /**
-     * Get a summary of the session for display
-     */
-    public function getSummaryAttribute(): string
-    {
-        $messageCount = $this->message_count;
-        $latestMessage = $this->messages()->latest()->first();
-        
-        if ($messageCount === 0) {
-            return 'New conversation';
+        if ($this->title) {
+            return; // Already has a title
         }
 
-        return "Messages: {$messageCount} • Last: " . $latestMessage?->created_at?->diffForHumans();
+        $firstMessage = $this->messages()->where('role', 'user')->first();
+        if ($firstMessage) {
+            // Use first 50 chars of first question as title
+            $this->title = substr($firstMessage->message, 0, 50) . (strlen($firstMessage->message) > 50 ? '...' : '');
+            $this->save();
+        }
     }
 }

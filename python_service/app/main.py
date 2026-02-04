@@ -484,6 +484,38 @@ class ChatResponse(BaseModel):
     tokens_used: int
     message: Optional[str] = None
 
+class QuestionGenerationRequest(BaseModel):
+    text: str
+    max_questions: int = 5
+
+class QuestionGenerationResponse(BaseModel):
+    success: bool
+    questions: List[dict]
+    count: int
+
+@app.post("/api/generate-questions", response_model=QuestionGenerationResponse)
+async def generate_questions(request: QuestionGenerationRequest):
+    """
+    Generate questions from PDF text (fast, no API needed)
+    """
+    try:
+        from question_generator import generate_questions_from_text
+        
+        questions = generate_questions_from_text(
+            request.text,
+            max_questions=min(request.max_questions, 7)
+        )
+        
+        return QuestionGenerationResponse(
+            success=True,
+            questions=questions,
+            count=len(questions)
+        )
+        
+    except Exception as e:
+        print(f"❌ Question generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat_with_pdf(request: ChatRequest):
     """

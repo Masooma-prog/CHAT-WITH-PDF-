@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Pdf;
+use App\Models\ChatSession;
+use App\Models\ChatMessage;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -11,9 +13,11 @@ use GuzzleHttp\Client;
 
 class ChatController extends Controller
 {
+    /**
+     * Phase 9: Chat with history tracking
+     */
     public function ask(Pdf $pdf, Request $request): JsonResponse
     {
-        // ALWAYS return JSON, no matter what
         try {
             // Check ownership
             if ($pdf->user_id !== Auth::id()) {
@@ -26,13 +30,40 @@ class ChatController extends Controller
                 return $this->jsonResponse(false, 'Please enter a message');
             }
 
+            // Get or create chat session
+            $session = ChatSession::firstOrCreate(
+                [
+                    'user_id' => Auth::id(),
+                    'pdf_id' => $pdf->id
+                ],
+                [
+                    'last_message_at' => now()
+                ]
+            );
+
+            // Save user message
+            $userMessage = ChatMessage::create([
+                'session_id' => $session->id,
+                'role' => 'user',
+                'message' => $message
+            ]);
+
             // Get Python PDF ID
             $pythonPdfId = $pdf->meta['python_pdf_id'] ?? null;
             if (!$pythonPdfId) {
-                return $this->jsonResponse(false, 'PDF not processed yet. Please wait and try again.');
+                $errorAnswer = 'PDF not processed yet. Please wait and try again.';
+                
+                // Save error as assistant message
+                ChatMessage::create([
+                    'session_id' => $session->id,
+                    'role' => 'assistant',
+                    'message' => $errorAnswer
+                ]);
+                
+                return $this->jsonResponse(false, $errorAnswer);
             }
 
-            // Call Python
+            // Call Python RAG service
             $client = new Client(['timeout' => 30, 'verify' => false]);
             $response = $client->post('http://localhost:8001/api/chat', [
                 'json' => [
@@ -45,13 +76,113 @@ class ChatController extends Controller
             $data = json_decode($response->getBody(), true);
             
             if ($data['success'] ?? false) {
-                return $this->jsonResponse(true, $data['answer']);
+                $answer = $data['answer'];
+                
+                // Save assistant response
+                ChatMessage::create([
+                    'session_id' => $session->id,
+                    'role' => 'assistant',
+                    'message' => $answer,
+                    'metadata' => [
+                        'model' => $data['model'] ?? 'local_rag',
+                        'tokens_used' => $data['tokens_used'] ?? 0,
+                        'sources_count' => count($data['sources'] ?? [])
+                    ]
+                ]);
+
+                // Update session
+                $session->update(['last_message_at' => now()]);
+                $session->generateTitle();
+
+                return $this->jsonResponse(true, $answer);
             }
 
-            return $this->jsonResponse(false, 'No response from AI');
+            $errorAnswer = 'No response from AI';
+            ChatMessage::create([
+                'session_id' => $session->id,
+                'role' => 'assistant',
+                'message' => $errorAnswer
+            ]);
+
+            return $this->jsonResponse(false, $errorAnswer);
 
         } catch (\Exception $e) {
+            Log::error("Chat error: " . $e->getMessage());
             return $this->jsonResponse(false, 'Error: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Get chat history for a PDF
+     */
+    public function history(Pdf $pdf): JsonResponse
+    {
+        try {
+            if ($pdf->user_id !== Auth::id()) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+            }
+
+            $session = ChatSession::where('user_id', Auth::id())
+                ->where('pdf_id', $pdf->id)
+                ->first();
+
+            if (!$session) {
+                return response()->json([
+                    'success' => true,
+                    'messages' => [],
+                    'session_id' => null
+                ]);
+            }
+
+            $messages = $session->messages()->orderBy('created_at', 'asc')->get();
+
+            return response()->json([
+                'success' => true,
+                'session_id' => $session->id,
+                'messages' => $messages->map(function ($msg) {
+                    return [
+                        'id' => $msg->id,
+                        'role' => $msg->role,
+                        'message' => $msg->message,
+                        'created_at' => $msg->created_at->toISOString()
+                    ];
+                })
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error("Error fetching history: " . $e->getMessage());
+            return response()->json(['success' => false, 'messages' => []], 500);
+        }
+    }
+
+    /**
+     * Get all chat sessions for current user
+     */
+    public function sessions(): JsonResponse
+    {
+        try {
+            $sessions = ChatSession::where('user_id', Auth::id())
+                ->with('pdf:id,title')
+                ->orderBy('last_message_at', 'desc')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'sessions' => $sessions->map(function ($session) {
+                    return [
+                        'id' => $session->id,
+                        'pdf_id' => $session->pdf_id,
+                        'pdf_title' => $session->pdf->title ?? 'Unknown',
+                        'title' => $session->title ?? 'New conversation',
+                        'last_message_at' => $session->last_message_at?->toISOString(),
+                        'messages_count' => $session->messages()->count()
+                    ];
+                })
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error("Error fetching sessions: " . $e->getMessage());
+            return response()->json(['success' => false, 'sessions' => []], 500);
         }
     }
 
@@ -60,7 +191,7 @@ class ChatController extends Controller
         return response()->json(['success' => $success, 'answer' => $answer]);
     }
 
-    // Stub methods
+    // Stub methods for API routes
     public function createSession(Request $request): JsonResponse
     {
         return response()->json(['success' => true]);
@@ -74,10 +205,5 @@ class ChatController extends Controller
     public function postMessage($session, Request $request): JsonResponse
     {
         return response()->json(['success' => true]);
-    }
-
-    public function history(Pdf $pdf): JsonResponse
-    {
-        return response()->json(['success' => true, 'history' => []]);
     }
 }

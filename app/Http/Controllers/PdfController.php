@@ -226,66 +226,51 @@ class PdfController extends Controller
                 return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
             }
 
-            // Refresh from database
-            $pdf->refresh();
-            $pythonPdfId = $pdf->meta['python_pdf_id'] ?? null;
-            
-            if (!$pythonPdfId) {
+            // Check if questions already exist
+            $existingQuestions = PredefinedQuestion::where('pdf_id', $pdf->id)->get();
+            if ($existingQuestions->count() > 0) {
                 return response()->json([
-                    'success' => false,
-                    'status' => 'error',
-                    'message' => 'Python PDF ID not found',
-                    'questions' => []
+                    'success' => true,
+                    'status' => 'ready',
+                    'questions' => $existingQuestions,
+                    'count' => $existingQuestions->count()
                 ]);
             }
 
+            // Generate questions instantly using Python service
             try {
-                // Use shorter timeout for polling requests
-                $pollClient = new Client([
-                    'timeout' => 15,
-                    'verify' => false,
-                    'headers' => [
-                        'ngrok-skip-browser-warning' => 'true',
-                        'User-Agent' => 'LaravelApp/1.0'
+                $response = $this->pythonClient->post(
+                    $this->pythonServiceUrl . '/api/generate-questions',
+                    [
+                        'json' => [
+                            'text' => $pdf->text ?? '',
+                            'max_questions' => 5
+                        ],
+                        'timeout' => 5  // Fast timeout
                     ]
-                ]);
-
-                $response = $pollClient->get(
-                    $this->pythonServiceUrl . '/api/pdfs/' . $pythonPdfId . '/questions'
                 );
 
-                $responseData = json_decode($response->getBody()->getContents(), true);
-                $status = $responseData['status'] ?? 'unknown';
+                $data = json_decode($response->getBody(), true);
                 
-                Log::info("Question poll status for PDF {$pdf->id}: {$status}");
-                
-                if ($status === 'ready' && isset($responseData['questions']) && count($responseData['questions']) > 0) {
-                    // Delete old questions and save new ones
-                    PredefinedQuestion::where('pdf_id', $pdf->id)
-                        ->where('source', 'python_ai')
-                        ->delete();
-                    
+                if ($data['success'] ?? false) {
                     $savedCount = 0;
-                    foreach ($responseData['questions'] as $question) {
-                        if (!empty($question['question'] ?? null)) {
-                            PredefinedQuestion::create([
-                                'pdf_id' => $pdf->id,
-                                'title' => $question['title'] ?? 'Question',
-                                'question' => $question['question'],
-                                'source' => 'python_ai'
-                            ]);
-                            $savedCount++;
-                        }
+                    foreach ($data['questions'] as $q) {
+                        PredefinedQuestion::create([
+                            'pdf_id' => $pdf->id,
+                            'title' => $q['title'],
+                            'question' => $q['question'],
+                            'source' => 'python_ai'
+                        ]);
+                        $savedCount++;
                     }
-                    
+
                     // Update meta
                     $meta = $pdf->meta ?? [];
                     $meta['questions_generated'] = true;
                     $meta['questions_count'] = $savedCount;
                     $meta['questions_status'] = 'completed';
-                    $meta['questions_generated_at'] = now()->toISOString();
                     $pdf->update(['meta' => $meta]);
-                    
+
                     $questions = PredefinedQuestion::where('pdf_id', $pdf->id)->get();
                     
                     return response()->json([
@@ -296,23 +281,17 @@ class PdfController extends Controller
                     ]);
                 }
                 
-                // Still processing
-                return response()->json([
-                    'success' => true,
-                    'status' => $status,
-                    'questions' => [],
-                    'message' => 'Questions are being generated...'
-                ]);
-                
             } catch (\Exception $e) {
-                Log::error("Auto-fetch failed: " . $e->getMessage());
-                return response()->json([
-                    'success' => false,
-                    'status' => 'error',
-                    'questions' => [],
-                    'message' => 'Temporary error, will retry'
-                ]);
+                Log::error("Question generation failed: " . $e->getMessage());
             }
+
+            // Return empty if generation failed
+            return response()->json([
+                'success' => true,
+                'status' => 'ready',
+                'questions' => [],
+                'message' => 'No questions generated'
+            ]);
 
         } catch (\Exception $e) {
             Log::error("Auto-fetch error: " . $e->getMessage());
@@ -350,6 +329,73 @@ class PdfController extends Controller
                 'success' => false,
                 'message' => 'Failed to fetch questions',
                 'questions' => []
+            ], 500);
+        }
+    }
+
+    public function regenerateQuestions(Pdf $pdf): JsonResponse
+    {
+        try {
+            if ($pdf->user_id !== Auth::id()) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+            }
+
+            // Delete old questions
+            PredefinedQuestion::where('pdf_id', $pdf->id)->delete();
+
+            // Generate new questions using Python service
+            $pythonPdfId = $pdf->meta['python_pdf_id'] ?? null;
+            if (!$pythonPdfId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'PDF not processed yet'
+                ]);
+            }
+
+            // Call Python to generate questions
+            try {
+                $response = $this->pythonClient->post(
+                    $this->pythonServiceUrl . '/api/generate-questions',
+                    [
+                        'json' => [
+                            'text' => $pdf->text ?? '',
+                            'max_questions' => 5
+                        ]
+                    ]
+                );
+
+                $data = json_decode($response->getBody(), true);
+                
+                if ($data['success'] ?? false) {
+                    foreach ($data['questions'] as $q) {
+                        PredefinedQuestion::create([
+                            'pdf_id' => $pdf->id,
+                            'title' => $q['title'],
+                            'question' => $q['question'],
+                            'source' => 'python_ai'
+                        ]);
+                    }
+
+                    return response()->json([
+                        'success' => true,
+                        'questions' => PredefinedQuestion::where('pdf_id', $pdf->id)->get(),
+                        'count' => count($data['questions'])
+                    ]);
+                }
+            } catch (\Exception $e) {
+                Log::error("Question generation failed: " . $e->getMessage());
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate questions'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error("Regenerate questions error: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error regenerating questions'
             ], 500);
         }
     }

@@ -310,18 +310,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function pollForQuestions(pdfId) {
         let attempt = 0;
-        const maxAttempts = 120; // 20 minutes max (120 * 10s)
-        const pollInterval = 10000; // 10 seconds
+        const maxAttempts = 20; // 10 seconds max (20 * 500ms)
+        const pollInterval = 500; // 500ms - fast polling since backend is instant
         
         while (attempt < maxAttempts) {
             attempt++;
             
             // Calculate progress (30% to 95%)
             const progress = 30 + ((attempt / maxAttempts) * 65);
-            const elapsedMinutes = Math.floor((Date.now() - uploadStartTime) / 60000);
-            const message = elapsedMinutes > 0 
-                ? `Generating questions... (${elapsedMinutes}m ${Math.floor(((Date.now() - uploadStartTime) % 60000) / 1000)}s elapsed)`
-                : `Generating questions... (${Math.floor((Date.now() - uploadStartTime) / 1000)}s elapsed)`;
+            const elapsedSeconds = Math.floor((Date.now() - uploadStartTime) / 1000);
+            const message = `Generating questions... (${elapsedSeconds}s elapsed)`;
             
             updateUploadProgress(Math.min(progress, 95), message);
 
