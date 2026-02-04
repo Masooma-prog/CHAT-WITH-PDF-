@@ -31,11 +31,15 @@ Route::middleware(['auth'])->group(function () {
     // Regenerate questions endpoint
     Route::post('/pdfs/{pdf}/regenerate-questions', [PdfController::class, 'regenerateQuestions'])->name('pdf.regenerate-questions');
 
-    // Chat functionality
+    // Chat functionality (specific routes BEFORE wildcard routes)
+    Route::post('/chat/compare', [ChatController::class, 'compareAsk'])->name('chat.compare');
+    Route::get('/chat/sessions', [ChatController::class, 'sessions'])->name('chat.sessions');
     Route::post('/chat/{pdf}', [ChatController::class, 'ask'])->name('chat.ask');
     Route::get('/chat/{pdf}/history', [ChatController::class, 'history'])->name('chat.history');
     Route::post('/chat/{pdf}/clear', [ChatController::class, 'clearHistory'])->name('chat.clear');
-    Route::get('/chat/sessions', [ChatController::class, 'sessions'])->name('chat.sessions');
+    
+    // Comparison view route
+    Route::get('/compare/{pdf1}/{pdf2}', [PdfController::class, 'compare'])->name('pdf.compare');
     
     // Test endpoint
     Route::get('/test-chat', function() {

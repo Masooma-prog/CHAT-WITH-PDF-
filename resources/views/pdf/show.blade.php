@@ -86,7 +86,8 @@
     </div>
 </div>
 
-<div class="h-screen flex gap-4 p-4">
+<!-- Normal View -->
+<div id="normalView" class="h-screen flex gap-4 p-4">
     <!-- Left Sidebar -->
     <div class="w-1/5 bg-gray-50 rounded-lg border border-gray-200 flex flex-col h-full">
         <div class="p-4 border-b border-gray-200">
@@ -94,7 +95,20 @@
             <p class="text-sm text-gray-600 truncate">Welcome, {{ Auth::user()->name }}</p>
         </div>
         <div class="p-4 border-b border-gray-200">
-            <h2 class="text-lg font-semibold text-gray-900">Recent PDFs</h2>
+            <div class="flex items-center justify-between mb-2">
+                <h2 class="text-lg font-semibold text-gray-900">Recent PDFs</h2>
+            </div>
+            <!-- Comparison Mode Toggle -->
+            <button id="toggleCompareMode" class="w-full mt-2 px-3 py-2 text-sm bg-gradient-to-r from-purple-50 to-purple-100 hover:from-purple-100 hover:to-purple-200 text-purple-700 rounded-lg border border-purple-200 transition-all flex items-center justify-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                <span id="compareModeText">Compare Mode</span>
+            </button>
+            <div id="compareInfo" class="hidden mt-2 p-2 bg-purple-50 rounded text-xs text-purple-700 border border-purple-200">
+                <span id="selectedCount">0 PDFs selected</span>
+                <button id="startCompare" class="hidden mt-1 w-full px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs">
+                    Start Comparing
+                </button>
+            </div>
         </div>
         <div id="pdfHistory" class="flex-1 overflow-y-auto p-2"></div>
         <div class="p-4 border-t border-gray-200">
@@ -146,8 +160,51 @@
                     </button>
                 </div>
             </div>
+            
+            <!-- Single PDF Viewer -->
             <div id="pdfViewer" class="hidden justify-center p-4">
                 <canvas id="pdfCanvas" class="border border-gray-300 rounded shadow-lg"></canvas>
+            </div>
+            
+            <!-- Split PDF Viewer (for comparison) -->
+            <div id="splitPdfViewer" class="hidden flex gap-4 p-4 h-full">
+                <!-- PDF 1 -->
+                <div class="flex-1 flex flex-col bg-white rounded-lg border-2 border-blue-400 shadow-lg">
+                    <div class="p-2 bg-blue-50 border-b border-blue-200 flex items-center justify-between">
+                        <span id="pdf1Title" class="text-sm font-semibold text-blue-900 truncate">PDF 1</span>
+                        <div class="flex items-center gap-1">
+                            <button id="pdf1Prev" class="p-1 text-blue-600 hover:bg-blue-100 rounded">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                            </button>
+                            <span id="pdf1Page" class="text-xs text-blue-700 px-2">1/1</span>
+                            <button id="pdf1Next" class="p-1 text-blue-600 hover:bg-blue-100 rounded">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex-1 overflow-auto bg-gray-50 flex items-center justify-center">
+                        <canvas id="pdf1Canvas" class="max-w-full max-h-full"></canvas>
+                    </div>
+                </div>
+                
+                <!-- PDF 2 -->
+                <div class="flex-1 flex flex-col bg-white rounded-lg border-2 border-green-400 shadow-lg">
+                    <div class="p-2 bg-green-50 border-b border-green-200 flex items-center justify-between">
+                        <span id="pdf2Title" class="text-sm font-semibold text-green-900 truncate">PDF 2</span>
+                        <div class="flex items-center gap-1">
+                            <button id="pdf2Prev" class="p-1 text-green-600 hover:bg-green-100 rounded">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                            </button>
+                            <span id="pdf2Page" class="text-xs text-green-700 px-2">1/1</span>
+                            <button id="pdf2Next" class="p-1 text-green-600 hover:bg-green-100 rounded">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex-1 overflow-auto bg-gray-50 flex items-center justify-center">
+                        <canvas id="pdf2Canvas" class="max-w-full max-h-full"></canvas>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -239,6 +296,8 @@
     </div>
 </div>
 
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     let currentPdfId = null;
@@ -247,6 +306,19 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentPageNum = 1;
     let pdfs = @json($pdfs ?? []);
     let uploadStartTime = null;
+    
+    // Comparison mode state
+    let isCompareMode = @json($isComparison ?? false);
+    let selectedPdfIds = [];
+    let selectedPdfs = [];
+    
+    // Split-screen state
+    let pdf1Doc = null;
+    let pdf2Doc = null;
+    let pdf1CurrentPage = 1;
+    let pdf2CurrentPage = 1;
+    let pdf1Data = @json($pdf1 ?? null);
+    let pdf2Data = @json($pdf2 ?? null);
 
     const elements = {
         pdfHistory: document.getElementById('pdfHistory'),
@@ -270,6 +342,11 @@ document.addEventListener('DOMContentLoaded', () => {
         clearHistoryBtn: document.getElementById('clearHistoryBtn'),
         messageCount: document.getElementById('messageCount'),
         quickActionsContainer: document.getElementById('quickActionsContainer'),
+        toggleCompareMode: document.getElementById('toggleCompareMode'),
+        compareModeText: document.getElementById('compareModeText'),
+        compareInfo: document.getElementById('compareInfo'),
+        selectedCount: document.getElementById('selectedCount'),
+        startCompare: document.getElementById('startCompare'),
         uploadProgressBar: document.getElementById('uploadProgressBar'),
         uploadProgressMessage: document.getElementById('uploadProgressMessage'),
         uploadProgressPercent: document.getElementById('uploadProgressPercent'),
@@ -445,21 +522,82 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ========== PDF HISTORY ==========
     
+    function togglePdfSelection(pdf) {
+        const index = selectedPdfIds.indexOf(pdf.id);
+        if (index > -1) {
+            selectedPdfIds.splice(index, 1);
+            selectedPdfs = selectedPdfs.filter(p => p.id !== pdf.id);
+        } else {
+            // Limit to 2 PDFs
+            if (selectedPdfIds.length >= 2) {
+                alert('You can only compare 2 PDFs at a time. Please deselect one first.');
+                return;
+            }
+            selectedPdfIds.push(pdf.id);
+            selectedPdfs.push(pdf);
+        }
+        
+        updateComparisonUI();
+        renderPdfHistory();
+    }
+    
+    function updateComparisonUI() {
+        const count = selectedPdfIds.length;
+        
+        if (count === 0) {
+            elements.selectedCount.textContent = 'Select 2 PDFs to compare';
+        } else if (count === 1) {
+            elements.selectedCount.textContent = '1 PDF selected (select 1 more)';
+        } else if (count === 2) {
+            elements.selectedCount.textContent = '2 PDFs selected - Ready!';
+        }
+        
+        if (count === 2) {
+            elements.startCompare.classList.remove('hidden');
+        } else {
+            elements.startCompare.classList.add('hidden');
+        }
+    }
+    
     function renderPdfHistory() {
         elements.pdfHistory.innerHTML = '';
         if (pdfs.length > 0) {
             const ul = document.createElement('ul');
             pdfs.forEach(pdf => {
                 const li = document.createElement('li');
-                const a = document.createElement('a');
-                a.href = `/pdfs/${pdf.id}`;
-                a.textContent = pdf.title;
-                a.className = `block px-4 py-2 cursor-pointer hover:bg-gray-200 rounded-lg transition-colors text-sm ${currentPdfId == pdf.id ? 'bg-blue-100 text-blue-700 font-semibold' : ''}`;
-                a.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    window.location.href = a.href;
-                });
-                li.appendChild(a);
+                li.className = 'relative';
+                
+                if (isCompareMode) {
+                    // Comparison mode: show checkboxes
+                    const label = document.createElement('label');
+                    label.className = 'flex items-center px-4 py-2 cursor-pointer hover:bg-gray-200 rounded-lg transition-colors text-sm';
+                    
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'mr-3 w-4 h-4 text-purple-600';
+                    checkbox.checked = selectedPdfIds.includes(pdf.id);
+                    checkbox.addEventListener('change', () => togglePdfSelection(pdf));
+                    
+                    const span = document.createElement('span');
+                    span.textContent = pdf.title;
+                    span.className = selectedPdfIds.includes(pdf.id) ? 'font-semibold text-purple-700' : '';
+                    
+                    label.appendChild(checkbox);
+                    label.appendChild(span);
+                    li.appendChild(label);
+                } else {
+                    // Normal mode: clickable links
+                    const a = document.createElement('a');
+                    a.href = `/pdfs/${pdf.id}`;
+                    a.textContent = pdf.title;
+                    a.className = `block px-4 py-2 cursor-pointer hover:bg-gray-200 rounded-lg transition-colors text-sm ${currentPdfId == pdf.id ? 'bg-blue-100 text-blue-700 font-semibold' : ''}`;
+                    a.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        window.location.href = a.href;
+                    });
+                    li.appendChild(a);
+                }
+                
                 ul.appendChild(li);
             });
             elements.pdfHistory.appendChild(ul);
@@ -727,6 +865,60 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function sendComparisonMessage(message) {
+        appendMessage('user', message);
+        elements.chatInput.value = '';
+        elements.typingIndicator.classList.remove('hidden');
+        elements.sendMessage.disabled = true;
+        elements.chatInput.disabled = true;
+
+        try {
+            // Use pdf1Data and pdf2Data IDs for comparison
+            const pdfIds = [pdf1Data.id, pdf2Data.id];
+            
+            console.log('Sending comparison request:', { message, pdfIds });
+            
+            const response = await fetch('/chat/compare', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    message: message,
+                    pdf_ids: pdfIds
+                })
+            });
+            
+            console.log('Response status:', response.status);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Server error response:', errorText);
+                throw new Error('Server error: ' + response.status);
+            }
+            
+            const data = await response.json();
+            console.log('Response data:', data);
+            
+            if (data.success && data.answer) {
+                appendMessage('bot', data.answer);
+                updateMessageCount();
+            } else {
+                appendMessage('bot', data.answer || 'Sorry, I received an invalid response. Please try again.');
+            }
+        } catch (error) {
+            console.error('Comparison error:', error);
+            appendMessage('bot', 'Error: ' + error.message);
+        } finally {
+            elements.typingIndicator.classList.add('hidden');
+            elements.sendMessage.disabled = false;
+            elements.chatInput.disabled = false;
+            elements.chatInput.focus();
+        }
+    }
+
     function resetChatUI(pdfTitle = null) {
         while (elements.chatMessages.children.length > 1) {
             elements.chatMessages.removeChild(elements.chatMessages.lastChild);
@@ -744,7 +936,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     elements.sendMessage.addEventListener('click', async () => {
         const message = elements.chatInput.value.trim();
-        if (!message || !currentPdfId) return;
+        if (!message) return;
+        
+        // Check if in comparison mode
+        if (currentPdfId === 'compare' && selectedPdfIds.length >= 2) {
+            await sendComparisonMessage(message);
+            return;
+        }
+        
+        if (!currentPdfId) return;
         
         appendMessage('user', message);
         elements.chatInput.value = '';
@@ -845,6 +1045,40 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // Toggle comparison mode
+    elements.toggleCompareMode.addEventListener('click', () => {
+        isCompareMode = !isCompareMode;
+        
+        if (isCompareMode) {
+            elements.compareModeText.textContent = 'Exit Compare Mode';
+            elements.compareInfo.classList.remove('hidden');
+            elements.toggleCompareMode.classList.remove('from-purple-50', 'to-purple-100');
+            elements.toggleCompareMode.classList.add('from-purple-600', 'to-purple-700', 'text-white');
+        } else {
+            elements.compareModeText.textContent = 'Compare Mode';
+            elements.compareInfo.classList.add('hidden');
+            elements.toggleCompareMode.classList.add('from-purple-50', 'to-purple-100');
+            elements.toggleCompareMode.classList.remove('from-purple-600', 'to-purple-700', 'text-white');
+            selectedPdfIds = [];
+            selectedPdfs = [];
+        }
+        
+        renderPdfHistory();
+    });
+
+    // Start comparison
+    elements.startCompare.addEventListener('click', async () => {
+        if (selectedPdfIds.length !== 2) {
+            alert('Please select exactly 2 PDFs to compare');
+            return;
+        }
+        
+        // Navigate to comparison page (like clicking a PDF)
+        const pdf1Id = selectedPdfIds[0];
+        const pdf2Id = selectedPdfIds[1];
+        window.location.href = `/compare/${pdf1Id}/${pdf2Id}`;
+    });
+
     // ========== PDF NAVIGATION ==========
     
     document.getElementById('prevPage').addEventListener('click', () => {
@@ -858,9 +1092,89 @@ document.addEventListener('DOMContentLoaded', () => {
     // ========== INITIALIZE ==========
     
     renderPdfHistory();
-    @if(isset($pdf))
+    
+    // Check if in comparison mode
+    @if(isset($isComparison) && $isComparison && isset($pdf1) && isset($pdf2))
+        // Auto-load comparison mode
+        (async () => {
+            elements.welcomeMessage.classList.add('hidden');
+            elements.pdfViewer.classList.add('hidden');
+            elements.pdfControls.style.display = 'none';
+            
+            document.getElementById('splitPdfViewer').classList.remove('hidden');
+            document.getElementById('splitPdfViewer').classList.add('flex');
+            
+            elements.pdfTitle.textContent = `Comparing: ${pdf1Data.title} vs ${pdf2Data.title}`;
+            
+            await loadSplitPdfs();
+            
+            elements.chatInput.disabled = false;
+            elements.sendMessage.disabled = false;
+            elements.quickActionsContainer.classList.remove('hidden');
+            
+            document.getElementById('welcomeText').textContent = `Comparing 2 PDFs. Ask questions to compare them!`;
+            
+            currentPdfId = 'compare';
+            selectedPdfIds = [pdf1Data.id, pdf2Data.id];
+        })();
+    @elseif(isset($pdf))
         selectPdf(@json($pdf));
     @endif
+    
+    async function loadSplitPdfs() {
+        try {
+            document.getElementById('pdf1Title').textContent = pdf1Data.title;
+            const task1 = pdfjsLib.getDocument(`/storage/${pdf1Data.file_path}`);
+            pdf1Doc = await task1.promise;
+            pdf1CurrentPage = 1;
+            await renderPdf1(pdf1CurrentPage);
+            
+            document.getElementById('pdf2Title').textContent = pdf2Data.title;
+            const task2 = pdfjsLib.getDocument(`/storage/${pdf2Data.file_path}`);
+            pdf2Doc = await task2.promise;
+            pdf2CurrentPage = 1;
+            await renderPdf2(pdf2CurrentPage);
+        } catch (error) {
+            console.error('Error loading PDFs:', error);
+            alert('Error loading PDFs');
+        }
+    }
+
+    async function renderPdf1(num) {
+        if (!pdf1Doc) return;
+        const page = await pdf1Doc.getPage(num);
+        const viewport = page.getViewport({ scale: 1.0 });
+        const canvas = document.getElementById('pdf1Canvas');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        document.getElementById('pdf1Page').textContent = `${num}/${pdf1Doc.numPages}`;
+    }
+
+    async function renderPdf2(num) {
+        if (!pdf2Doc) return;
+        const page = await pdf2Doc.getPage(num);
+        const viewport = page.getViewport({ scale: 1.0 });
+        const canvas = document.getElementById('pdf2Canvas');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        document.getElementById('pdf2Page').textContent = `${num}/${pdf2Doc.numPages}`;
+    }
+
+    // PDF navigation for split view
+    document.getElementById('pdf1Prev').addEventListener('click', () => {
+        if (pdf1CurrentPage > 1) { pdf1CurrentPage--; renderPdf1(pdf1CurrentPage); }
+    });
+    document.getElementById('pdf1Next').addEventListener('click', () => {
+        if (pdf1Doc && pdf1CurrentPage < pdf1Doc.numPages) { pdf1CurrentPage++; renderPdf1(pdf1CurrentPage); }
+    });
+    document.getElementById('pdf2Prev').addEventListener('click', () => {
+        if (pdf2CurrentPage > 1) { pdf2CurrentPage--; renderPdf2(pdf2CurrentPage); }
+    });
+    document.getElementById('pdf2Next').addEventListener('click', () => {
+        if (pdf2Doc && pdf2CurrentPage < pdf2Doc.numPages) { pdf2CurrentPage++; renderPdf2(pdf2CurrentPage); }
+    });
 });
 </script>
 </body>

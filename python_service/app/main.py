@@ -476,6 +476,11 @@ class ChatRequest(BaseModel):
     pdf_id: str
     chat_history: list = []  # Optional: for follow-up questions
 
+class CompareChatRequest(BaseModel):
+    question: str
+    pdf_ids: List[str]  # Multiple PDF IDs for comparison
+    chat_history: list = []
+
 class ChatResponse(BaseModel):
     success: bool
     answer: str
@@ -571,6 +576,76 @@ async def chat_with_pdf(request: ChatRequest):
         
     except Exception as e:
         print(f"❌ Chat error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/compare-chat", response_model=ChatResponse)
+async def compare_pdfs_chat(request: CompareChatRequest):
+    """
+    Multi-PDF Comparison Chat using RAG
+    
+    Flow:
+    1. Generate embedding for user's question
+    2. Search ALL selected PDFs for relevant chunks
+    3. Combine chunks with source labels
+    4. Use Groq LLM to generate comparison answer
+    """
+    try:
+        from rag_local import generate_comparison_answer_with_groq
+        
+        print(f"🔄 Comparison chat request for {len(request.pdf_ids)} PDFs")
+        print(f"   PDFs: {request.pdf_ids}")
+        print(f"   Question: {request.question}")
+        
+        # Step 1: Generate embedding for question
+        query_embedding = generate_embedding(request.question)
+        
+        # Step 2: Search all PDFs and collect chunks
+        vs = get_vector_store_instance()
+        all_chunks = []
+        pdf_titles = {}
+        
+        for pdf_id in request.pdf_ids:
+            chunks = vs.search(pdf_id, query_embedding, top_k=3)
+            if chunks:
+                # Label each chunk with source PDF
+                for chunk in chunks:
+                    chunk['source_pdf_id'] = pdf_id
+                all_chunks.extend(chunks)
+                print(f"   Found {len(chunks)} chunks from PDF {pdf_id}")
+        
+        if not all_chunks:
+            return ChatResponse(
+                success=False,
+                answer="No relevant information found in the selected documents.",
+                sources=[],
+                model="comparison_rag",
+                tokens_used=0,
+                message="No content found in selected PDFs"
+            )
+        
+        print(f"   Total chunks collected: {len(all_chunks)}")
+        
+        # Step 3: Generate comparison answer using Groq
+        rag_result = generate_comparison_answer_with_groq(
+            question=request.question,
+            context_chunks=all_chunks,
+            pdf_count=len(request.pdf_ids)
+        )
+        
+        print(f"   ✅ Comparison answer generated using {rag_result['method']}")
+        
+        # Step 4: Return response
+        return ChatResponse(
+            success=True,
+            answer=rag_result["answer"],
+            sources=all_chunks[:5],  # Return top 5 sources from all PDFs
+            model=rag_result.get("model", "comparison_rag"),
+            tokens_used=rag_result.get("tokens_used", 0),
+            message=f"Comparison answer from {len(request.pdf_ids)} PDFs"
+        )
+        
+    except Exception as e:
+        print(f"❌ Comparison chat error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # ========== RUN SERVER ==========

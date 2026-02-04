@@ -220,6 +220,128 @@ class ChatController extends Controller
         }
     }
 
+    /**
+     * Compare multiple PDFs - chat with multiple documents
+     * Works exactly like regular chat but with 2 PDFs
+     */
+    public function compareAsk(Request $request): JsonResponse
+    {
+        try {
+            // Get PDF IDs from request
+            $pdfIds = $request->input('pdf_ids', []);
+            $message = $request->input('message');
+            
+            if (empty($message)) {
+                return $this->jsonResponse(false, 'Please enter a message');
+            }
+            
+            if (count($pdfIds) !== 2) {
+                return $this->jsonResponse(false, 'Please select exactly 2 PDFs to compare');
+            }
+            
+            // Verify all PDFs belong to user
+            $pdfs = Pdf::whereIn('id', $pdfIds)
+                ->where('user_id', Auth::id())
+                ->get();
+            
+            if ($pdfs->count() !== 2) {
+                return $this->jsonResponse(false, 'Some PDFs not found or unauthorized');
+            }
+            
+            // Sort PDF IDs for consistent session
+            sort($pdfIds);
+            
+            // Get or create comparison session (simplified - no meta column needed)
+            $session = ChatSession::firstOrCreate(
+                [
+                    'user_id' => Auth::id(),
+                    'pdf_id' => $pdfs->first()->id,
+                    'title' => "Comparing: {$pdfs[0]->title} vs {$pdfs[1]->title}"
+                ],
+                [
+                    'last_message_at' => now()
+                ]
+            );
+
+            // Save user message
+            ChatMessage::create([
+                'session_id' => $session->id,
+                'role' => 'user',
+                'message' => $message
+            ]);
+            
+            // Get Python PDF IDs
+            $pythonPdfIds = [];
+            foreach ($pdfs as $pdf) {
+                $pythonId = $pdf->meta['python_pdf_id'] ?? null;
+                if ($pythonId) {
+                    $pythonPdfIds[] = (string)$pythonId;
+                }
+            }
+            
+            if (count($pythonPdfIds) !== 2) {
+                $errorAnswer = 'PDFs not processed yet. Please wait and try again.';
+                
+                // Save error as assistant message
+                ChatMessage::create([
+                    'session_id' => $session->id,
+                    'role' => 'assistant',
+                    'message' => $errorAnswer
+                ]);
+                
+                return $this->jsonResponse(false, $errorAnswer);
+            }
+            
+            // Call Python comparison service
+            $client = new Client(['timeout' => 45, 'verify' => false]);
+            $response = $client->post('http://localhost:8001/api/compare-chat', [
+                'json' => [
+                    'question' => $message,
+                    'pdf_ids' => $pythonPdfIds,
+                    'chat_history' => []
+                ]
+            ]);
+            
+            $data = json_decode($response->getBody(), true);
+            
+            if ($data['success'] ?? false) {
+                $answer = $data['answer'];
+                
+                // Save assistant response
+                ChatMessage::create([
+                    'session_id' => $session->id,
+                    'role' => 'assistant',
+                    'message' => $answer,
+                    'metadata' => [
+                        'model' => $data['model'] ?? 'comparison_rag',
+                        'tokens_used' => $data['tokens_used'] ?? 0,
+                        'pdfs_compared' => 2,
+                        'sources_count' => count($data['sources'] ?? [])
+                    ]
+                ]);
+                
+                // Update session
+                $session->update(['last_message_at' => now()]);
+                
+                return $this->jsonResponse(true, $answer);
+            }
+            
+            $errorAnswer = 'No response from AI';
+            ChatMessage::create([
+                'session_id' => $session->id,
+                'role' => 'assistant',
+                'message' => $errorAnswer
+            ]);
+            
+            return $this->jsonResponse(false, $errorAnswer);
+            
+        } catch (\Exception $e) {
+            Log::error("Comparison chat error: " . $e->getMessage());
+            Log::error("Stack trace: " . $e->getTraceAsString());
+            return $this->jsonResponse(false, 'Error: ' . $e->getMessage());
+        }
+    }
+
     private function jsonResponse(bool $success, string $answer): JsonResponse
     {
         return response()->json(['success' => $success, 'answer' => $answer]);

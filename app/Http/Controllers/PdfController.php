@@ -54,6 +54,26 @@ class PdfController extends Controller
         return view('pdf.show', compact('pdf', 'pdfs'));
     }
 
+    public function compare(Pdf $pdf1, Pdf $pdf2)
+    {
+        // Verify both PDFs belong to user
+        if ($pdf1->user_id !== Auth::id() || $pdf2->user_id !== Auth::id()) {
+            abort(403, 'Unauthorized Access');
+        }
+        
+        $pdfs = Auth::user()->pdfs()->latest()->take(20)->get();
+        
+        // Pass both PDFs to the same view (pdf.show)
+        // The view will detect 2 PDFs and show split-screen automatically
+        return view('pdf.show', [
+            'pdf' => $pdf1, // For backward compatibility
+            'pdf1' => $pdf1,
+            'pdf2' => $pdf2,
+            'pdfs' => $pdfs,
+            'isComparison' => true
+        ]);
+    }
+
     public function upload(Request $request): JsonResponse
     {
         try {
