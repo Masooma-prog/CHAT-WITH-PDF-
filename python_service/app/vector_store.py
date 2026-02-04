@@ -14,15 +14,15 @@ class VectorStore:
     Provides persistent storage and fast similarity search.
     """
     
-    def __init__(self, storage_dir: str = "vector_store"):
+    def __init__(self, storage_dir: str = "../vector_store"):
         """
         Initialize vector store.
         
         Args:
             storage_dir: Directory to store FAISS indexes and metadata
         """
-        self.storage_dir = Path(storage_dir)
-        self.storage_dir.mkdir(exist_ok=True)
+        self.storage_dir = Path(storage_dir).resolve()  # Use absolute path
+        self.storage_dir.mkdir(exist_ok=True, parents=True)
         
         # Store FAISS indexes per PDF
         self.indexes = {}  # {pdf_id: faiss.Index}

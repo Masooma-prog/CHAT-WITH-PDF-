@@ -662,9 +662,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ message })
             });
             
-            if (!response.ok) throw new Error('Server error');
+            console.log('Response status:', response.status);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Server error response:', errorText);
+                throw new Error('Server error');
+            }
+            
             const data = await response.json();
-            appendMessage('bot', data.answer);
+            console.log('Chat response:', data);
+            
+            if (data.answer) {
+                appendMessage('bot', data.answer);
+            } else {
+                console.error('No answer in response:', data);
+                appendMessage('bot', 'Sorry, I received an invalid response. Please try again.');
+            }
         } catch (error) {
             console.error('Error:', error);
             appendMessage('bot', 'Sorry, I encountered an error. Please try again.');

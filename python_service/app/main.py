@@ -72,14 +72,12 @@ async def root():
         "service": "ChatPDF Python Service",
         "version": "1.0.0",
         "status": "running",
-        "phase": 4,
+        "phase": 8,
         "endpoints": {
             "health": "/health",
-            "extract_text": "/api/extract-text (Phase 4)",
-            "upload": "/api/upload (Phase 5)",
-            "embeddings": "/api/embeddings (Phase 6)",
+            "chunk_text": "/api/chunk-text (Phase 5)",
             "search": "/api/search (Phase 7)",
-            "chat": "/api/chat (Phase 8-9)"
+            "chat": "/api/chat (Phase 8 - RAG with Groq)"
         }
     }
 
@@ -316,56 +314,87 @@ class ChunksResponse(BaseModel):
 @app.get("/api/chunks/{pdf_id}", response_model=ChunksResponse)
 async def get_chunks(pdf_id: str, include_embeddings: bool = False):
     """
-    Phase 5: Retrieve chunks for a specific PDF
+    Phase 5-7: Retrieve chunks for a specific PDF from vector store
     Set include_embeddings=true to get full embeddings (large response)
     """
-    # Debug: Log what we're looking for and what we have
-    print(f"Looking for PDF ID: {pdf_id} (type: {type(pdf_id)})")
-    print(f"Available PDF IDs: {list(pdf_storage.keys())}")
-    
-    if pdf_id not in pdf_storage:
-        raise HTTPException(
-            status_code=404, 
-            detail=f"PDF not found. Available IDs: {list(pdf_storage.keys())}"
+    try:
+        # Get from vector store (Phase 7)
+        vs = get_vector_store_instance()
+        pdf_info = vs.get_pdf_info(pdf_id)
+        
+        if not pdf_info:
+            # Fallback to in-memory storage
+            if pdf_id not in pdf_storage:
+                available_ids = vs.list_pdfs()
+                raise HTTPException(
+                    status_code=404, 
+                    detail=f"PDF not found. Available IDs: {available_ids}"
+                )
+            
+            # Return from memory
+            pdf_data = pdf_storage[pdf_id]
+            chunks = pdf_data['chunks']
+        else:
+            # Get chunks from vector store
+            chunks = vs.chunks_data.get(pdf_id, [])
+        
+        # Remove embeddings from response if not requested
+        if not include_embeddings:
+            chunks = [
+                {k: v for k, v in chunk.items() if k != 'embedding'}
+                for chunk in chunks
+            ]
+        
+        return ChunksResponse(
+            success=True,
+            pdf_id=pdf_id,
+            chunks=chunks,
+            total_chunks=len(chunks),
+            message=f"Retrieved {len(chunks)} chunks" + (" (without embeddings)" if not include_embeddings else " (with embeddings)")
         )
-    
-    pdf_data = pdf_storage[pdf_id]
-    chunks = pdf_data['chunks']
-    
-    # Remove embeddings from response if not requested (makes response much smaller)
-    if not include_embeddings:
-        chunks = [
-            {k: v for k, v in chunk.items() if k != 'embedding'}
-            for chunk in chunks
-        ]
-    
-    return ChunksResponse(
-        success=True,
-        pdf_id=pdf_id,
-        chunks=chunks,
-        total_chunks=len(chunks),
-        message=f"Retrieved {len(chunks)} chunks" + (" (without embeddings)" if not include_embeddings else " (with embeddings)")
-    )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ========== PHASE 5: LIST ALL STORED PDFS (DEBUG) ==========
 
 @app.get("/api/pdfs")
 async def list_pdfs():
     """
-    Debug endpoint: List all PDFs stored in memory
+    Debug endpoint: List all PDFs (from vector store and memory)
     """
-    return {
-        "success": True,
-        "total_pdfs": len(pdf_storage),
-        "pdf_ids": list(pdf_storage.keys()),
-        "pdfs": {
-            pdf_id: {
+    vs = get_vector_store_instance()
+    vector_store_pdfs = vs.list_pdfs()
+    
+    # Combine data from both sources
+    all_pdfs = {}
+    
+    # From vector store
+    for pdf_id in vector_store_pdfs:
+        info = vs.get_pdf_info(pdf_id)
+        all_pdfs[pdf_id] = {
+            "source": "vector_store",
+            "chunks_count": info['chunks_count'],
+            "dimension": info['dimension'],
+            "filename": pdf_storage.get(pdf_id, {}).get('filename', 'unknown')
+        }
+    
+    # From memory (if not in vector store)
+    for pdf_id, data in pdf_storage.items():
+        if pdf_id not in all_pdfs:
+            all_pdfs[pdf_id] = {
+                "source": "memory_only",
                 "filename": data["filename"],
                 "chunks_count": len(data["chunks"]),
                 "page_count": data["page_count"]
             }
-            for pdf_id, data in pdf_storage.items()
-        }
+    
+    return {
+        "success": True,
+        "total_pdfs": len(all_pdfs),
+        "pdf_ids": list(all_pdfs.keys()),
+        "pdfs": all_pdfs
     }
 
 # ========== PHASE 6: EMBEDDINGS ==========
@@ -440,30 +469,77 @@ async def search_similar(request: SearchRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ========== PHASE 8-9: RAG CHAT (PLACEHOLDER) ==========
+# ========== PHASE 8: RAG CHAT WITH GROQ ==========
 
 class ChatRequest(BaseModel):
     question: str
     pdf_id: str
+    chat_history: list = []  # Optional: for follow-up questions
 
 class ChatResponse(BaseModel):
     success: bool
     answer: str
     sources: List[dict]
+    model: str
+    tokens_used: int
     message: Optional[str] = None
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat_with_pdf(request: ChatRequest):
     """
-    Phase 8-9: Chat with PDF using RAG (Retrieval-Augmented Generation)
-    This will be implemented in Phases 8-9
+    Phase 8: Chat with PDF using LOCAL RAG (No external APIs)
+    
+    Flow:
+    1. Generate embedding for user's question
+    2. Search vector store for relevant chunks
+    3. Return chunks as answer (pure RAG)
     """
-    return ChatResponse(
-        success=False,
-        answer="",
-        sources=[],
-        message="Phase 8-9: Not yet implemented"
-    )
+    try:
+        from rag_local import generate_extractive_answer
+        
+        print(f"💬 Chat request for PDF {request.pdf_id}")
+        print(f"   Question: {request.question}")
+        
+        # Step 1: Generate embedding for question
+        query_embedding = generate_embedding(request.question)
+        
+        # Step 2: Search vector store for relevant chunks
+        vs = get_vector_store_instance()
+        similar_chunks = vs.search(request.pdf_id, query_embedding, top_k=5)
+        
+        if not similar_chunks:
+            return ChatResponse(
+                success=False,
+                answer="",
+                sources=[],
+                model="local_rag",
+                tokens_used=0,
+                message=f"No content found for PDF {request.pdf_id}"
+            )
+        
+        print(f"   Found {len(similar_chunks)} relevant chunks")
+        
+        # Step 3: Generate answer using LOCAL RAG (no API)
+        rag_result = generate_extractive_answer(
+            question=request.question,
+            context_chunks=similar_chunks
+        )
+        
+        print(f"   ✅ Answer generated using {rag_result['method']}")
+        
+        # Step 4: Return response
+        return ChatResponse(
+            success=True,
+            answer=rag_result["answer"],
+            sources=similar_chunks,
+            model=rag_result["method"],
+            tokens_used=0,  # No tokens used (local processing)
+            message="Answer generated using local RAG (no external API)"
+        )
+        
+    except Exception as e:
+        print(f"❌ Chat error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ========== RUN SERVER ==========
 

@@ -9,6 +9,15 @@ use App\Models\Pdf;
 // --- Authentication Routes ---
 Auth::routes(['reset' => false, 'verify' => false]);
 
+// Test endpoint (outside auth)
+Route::get('/test-json', function() {
+    return response()->json([
+        'success' => true,
+        'message' => 'JSON works!',
+        'timestamp' => now()
+    ]);
+});
+
 // --- Protected Routes ---
 Route::middleware(['auth'])->group(function () {
     // PDF viewer and history page
@@ -24,6 +33,15 @@ Route::middleware(['auth'])->group(function () {
 
     // Chat functionality
     Route::post('/chat/{pdf}', [ChatController::class, 'ask'])->name('chat.ask');
+    
+    // Test endpoint
+    Route::get('/test-chat', function() {
+        return response()->json([
+            'success' => true,
+            'answer' => 'Test response - JSON is working!',
+            'timestamp' => now()->toISOString()
+        ]);
+    });
     
     // Home route redirects to the main PDF page
     Route::get('/home', function() {
