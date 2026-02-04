@@ -12,6 +12,7 @@ import uvicorn
 import os
 from dotenv import load_dotenv
 from chunker import TextChunker
+from embeddings import get_embedding_generator, generate_embeddings_batch
 import json
 import uuid
 
@@ -40,6 +41,16 @@ pdf_storage = {}  # {pdf_id: {'text': str, 'chunks': List[Dict], 'metadata': Dic
 
 # Initialize chunker
 chunker = TextChunker(chunk_size=1000, overlap=100)
+
+# Phase 6: Initialize embedding generator (lazy loading)
+embedding_generator = None
+
+def get_embeddings():
+    """Get or initialize embedding generator."""
+    global embedding_generator
+    if embedding_generator is None:
+        embedding_generator = get_embedding_generator()
+    return embedding_generator
 
 # ========== PHASE 4: BASIC ENDPOINTS ==========
 
@@ -224,8 +235,7 @@ class ChunkTextRequest(BaseModel):
 @app.post("/api/chunk-text", response_model=UploadResponse)
 async def chunk_text_endpoint(request: ChunkTextRequest):
     """
-    Phase 5: Receive text from Laravel and chunk it
-    This is called after Laravel extracts text in Phase 3
+    Phase 5-6: Receive text from Laravel, chunk it, and generate embeddings
     """
     try:
         pdf_id = request.pdf_id
@@ -238,22 +248,35 @@ async def chunk_text_endpoint(request: ChunkTextRequest):
         chunks = chunker.chunk_text(text, pdf_id=pdf_id)
         chunk_stats = chunker.get_chunk_stats(chunks)
         
+        # Phase 6: Generate embeddings for all chunks
+        print(f"📊 Phase 6: Generating embeddings for {len(chunks)} chunks...")
+        chunk_texts = [chunk['text'] for chunk in chunks]
+        embeddings = generate_embeddings_batch(chunk_texts)
+        
+        # Add embeddings to chunks
+        for i, chunk in enumerate(chunks):
+            chunk['embedding'] = embeddings[i]
+        
+        print(f"✅ Phase 6: Generated {len(embeddings)} embeddings")
+        
         # Store in memory
         pdf_storage[pdf_id] = {
             'filename': request.filename,
             'text': text,
             'chunks': chunks,
-            'page_count': text.count('\f') + 1,  # Rough page count
+            'page_count': text.count('\f') + 1,
             'metadata': {
                 'uploaded_at': str(uuid.uuid4()),
-                'chunk_stats': chunk_stats
+                'chunk_stats': chunk_stats,
+                'embeddings_generated': True,
+                'embedding_dimension': len(embeddings[0]) if embeddings else 0
             }
         }
         
         return UploadResponse(
             success=True,
             pdf_id=pdf_id,
-            message=f"Text chunked successfully. {len(chunks)} chunks created.",
+            message=f"Text chunked and embedded successfully. {len(chunks)} chunks with embeddings created.",
             chunks_count=len(chunks),
             chunk_stats=chunk_stats
         )
@@ -271,9 +294,10 @@ class ChunksResponse(BaseModel):
     message: str
 
 @app.get("/api/chunks/{pdf_id}", response_model=ChunksResponse)
-async def get_chunks(pdf_id: str):
+async def get_chunks(pdf_id: str, include_embeddings: bool = False):
     """
     Phase 5: Retrieve chunks for a specific PDF
+    Set include_embeddings=true to get full embeddings (large response)
     """
     # Debug: Log what we're looking for and what we have
     print(f"Looking for PDF ID: {pdf_id} (type: {type(pdf_id)})")
@@ -286,13 +310,21 @@ async def get_chunks(pdf_id: str):
         )
     
     pdf_data = pdf_storage[pdf_id]
+    chunks = pdf_data['chunks']
+    
+    # Remove embeddings from response if not requested (makes response much smaller)
+    if not include_embeddings:
+        chunks = [
+            {k: v for k, v in chunk.items() if k != 'embedding'}
+            for chunk in chunks
+        ]
     
     return ChunksResponse(
         success=True,
         pdf_id=pdf_id,
-        chunks=pdf_data['chunks'],
-        total_chunks=len(pdf_data['chunks']),
-        message=f"Retrieved {len(pdf_data['chunks'])} chunks"
+        chunks=chunks,
+        total_chunks=len(chunks),
+        message=f"Retrieved {len(chunks)} chunks" + (" (without embeddings)" if not include_embeddings else " (with embeddings)")
     )
 
 # ========== PHASE 5: LIST ALL STORED PDFS (DEBUG) ==========
@@ -316,7 +348,7 @@ async def list_pdfs():
         }
     }
 
-# ========== PHASE 6: EMBEDDINGS (PLACEHOLDER) ==========
+# ========== PHASE 6: EMBEDDINGS ==========
 
 class EmbeddingRequest(BaseModel):
     text: str
@@ -324,18 +356,28 @@ class EmbeddingRequest(BaseModel):
 
 class EmbeddingResponse(BaseModel):
     success: bool
+    embedding: List[float]
+    dimension: int
     message: str
 
 @app.post("/api/embeddings", response_model=EmbeddingResponse)
-async def generate_embeddings(request: EmbeddingRequest):
+async def generate_embeddings_endpoint(request: EmbeddingRequest):
     """
-    Phase 6: Generate embeddings for text chunks
-    This will be implemented in Phase 6
+    Phase 6: Generate embedding for a single text
     """
-    return EmbeddingResponse(
-        success=False,
-        message="Phase 6: Not yet implemented"
-    )
+    try:
+        from embeddings import generate_embedding
+        
+        embedding = generate_embedding(request.text)
+        
+        return EmbeddingResponse(
+            success=True,
+            embedding=embedding,
+            dimension=len(embedding),
+            message="Embedding generated successfully"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ========== PHASE 7: VECTOR SEARCH (PLACEHOLDER) ==========
 
