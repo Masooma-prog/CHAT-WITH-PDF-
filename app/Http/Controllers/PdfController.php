@@ -119,6 +119,36 @@ class PdfController extends Controller
                 // Don't fail the upload, just log the error
             }
 
+            // Phase 5: Send to Python service for chunking
+            if ($this->usePythonBackend && !empty($pdf->text)) {
+                try {
+                    Log::info("📤 Phase 5: Sending text to Python service for chunking");
+                    
+                    // Send text directly instead of file
+                    $response = $this->pythonClient->post($this->pythonServiceUrl . '/api/chunk-text', [
+                        'json' => [
+                            'text' => $pdf->text,
+                            'pdf_id' => (string)$pdf->id,
+                            'filename' => $pdf->original_name
+                        ]
+                    ]);
+                    
+                    $responseData = json_decode($response->getBody()->getContents(), true);
+                    
+                    if ($responseData['success'] ?? false) {
+                        $pythonPdfId = $responseData['pdf_id'];
+                        $meta = $pdf->meta ?? [];
+                        $meta['python_pdf_id'] = $pythonPdfId;
+                        $meta['chunks_count'] = $responseData['chunks_count'] ?? 0;
+                        $pdf->update(['meta' => $meta, 'status' => 'chunked']);
+                        Log::info("✅ Phase 5: PDF chunked successfully. Python ID: {$pythonPdfId}");
+                    }
+                } catch (\Exception $e) {
+                    Log::error("❌ Phase 5: Python chunking failed: " . $e->getMessage());
+                    // Don't fail the upload
+                }
+            }
+
             // Phase 2: Return success response
             return response()->json([
                 'success' => true,

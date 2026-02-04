@@ -1,5 +1,8 @@
-# Phase 4: Python FastAPI Service for Chat with PDF
-# This service handles ML operations that Laravel/PHP cannot do
+# Phase 5: Text Chunking Module
+# Splits large text into smaller, overlapping chunks for better AI processing
+
+import re
+from typing import List, Dict
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,6 +11,9 @@ from typing import Optional, List
 import uvicorn
 import os
 from dotenv import load_dotenv
+from chunker import TextChunker
+import json
+import uuid
 
 # Load environment variables
 load_dotenv()
@@ -27,6 +33,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ========== PHASE 5: IN-MEMORY STORAGE ==========
+# Store PDF chunks in memory (will be persisted to FAISS in Phase 7)
+pdf_storage = {}  # {pdf_id: {'text': str, 'chunks': List[Dict], 'metadata': Dict}}
+
+# Initialize chunker
+chunker = TextChunker(chunk_size=1000, overlap=100)
 
 # ========== PHASE 4: BASIC ENDPOINTS ==========
 
@@ -120,24 +133,188 @@ async def extract_text(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ========== PHASE 5: PDF UPLOAD & STORAGE (PLACEHOLDER) ==========
+# ========== PHASE 5: PDF UPLOAD & CHUNKING ==========
 
 class UploadResponse(BaseModel):
     success: bool
     pdf_id: str
     message: str
+    chunks_count: int
+    chunk_stats: Dict
 
 @app.post("/api/upload", response_model=UploadResponse)
 async def upload_pdf(file: UploadFile = File(...)):
     """
-    Phase 5: Upload PDF and prepare for processing
-    This will be implemented in Phase 5
+    Phase 5: Upload PDF, extract text, and chunk it
     """
-    return UploadResponse(
-        success=False,
-        pdf_id="",
-        message="Phase 5: Not yet implemented"
+    try:
+        # Generate unique PDF ID
+        pdf_id = str(uuid.uuid4())
+        
+        # Create temp directory if it doesn't exist
+        import tempfile
+        temp_dir = tempfile.gettempdir()
+        temp_path = os.path.join(temp_dir, f"{pdf_id}_{file.filename}")
+        
+        # Save uploaded file temporarily
+        with open(temp_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+        
+        # Extract text using PyPDF2
+        import PyPDF2
+        text = ""
+        page_count = 0
+        
+        try:
+            with open(temp_path, 'rb') as pdf_file:
+                pdf_reader = PyPDF2.PdfReader(pdf_file)
+                page_count = len(pdf_reader.pages)
+                
+                for page in pdf_reader.pages:
+                    text += page.extract_text() + "\n"
+        except Exception as e:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            raise HTTPException(status_code=400, detail=f"Failed to extract text: {str(e)}")
+        
+        # Clean up temp file
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        
+        if not text.strip():
+            raise HTTPException(status_code=400, detail="No text could be extracted from PDF")
+        
+        # Phase 5: Chunk the text
+        chunks = chunker.chunk_text(text, pdf_id=pdf_id)
+        chunk_stats = chunker.get_chunk_stats(chunks)
+        
+        # Store in memory
+        pdf_storage[pdf_id] = {
+            'filename': file.filename,
+            'text': text,
+            'chunks': chunks,
+            'page_count': page_count,
+            'metadata': {
+                'uploaded_at': str(uuid.uuid4()),  # Timestamp placeholder
+                'chunk_stats': chunk_stats
+            }
+        }
+        
+        return UploadResponse(
+            success=True,
+            pdf_id=pdf_id,
+            message=f"PDF uploaded and chunked successfully. {len(chunks)} chunks created.",
+            chunks_count=len(chunks),
+            chunk_stats=chunk_stats
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ========== PHASE 5: CHUNK TEXT ENDPOINT (FOR LARAVEL) ==========
+
+class ChunkTextRequest(BaseModel):
+    text: str
+    pdf_id: str
+    filename: str
+
+@app.post("/api/chunk-text", response_model=UploadResponse)
+async def chunk_text_endpoint(request: ChunkTextRequest):
+    """
+    Phase 5: Receive text from Laravel and chunk it
+    This is called after Laravel extracts text in Phase 3
+    """
+    try:
+        pdf_id = request.pdf_id
+        text = request.text
+        
+        if not text.strip():
+            raise HTTPException(status_code=400, detail="Text is empty")
+        
+        # Phase 5: Chunk the text
+        chunks = chunker.chunk_text(text, pdf_id=pdf_id)
+        chunk_stats = chunker.get_chunk_stats(chunks)
+        
+        # Store in memory
+        pdf_storage[pdf_id] = {
+            'filename': request.filename,
+            'text': text,
+            'chunks': chunks,
+            'page_count': text.count('\f') + 1,  # Rough page count
+            'metadata': {
+                'uploaded_at': str(uuid.uuid4()),
+                'chunk_stats': chunk_stats
+            }
+        }
+        
+        return UploadResponse(
+            success=True,
+            pdf_id=pdf_id,
+            message=f"Text chunked successfully. {len(chunks)} chunks created.",
+            chunks_count=len(chunks),
+            chunk_stats=chunk_stats
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ========== PHASE 5: GET CHUNKS ENDPOINT ==========
+
+class ChunksResponse(BaseModel):
+    success: bool
+    pdf_id: str
+    chunks: List[Dict]
+    total_chunks: int
+    message: str
+
+@app.get("/api/chunks/{pdf_id}", response_model=ChunksResponse)
+async def get_chunks(pdf_id: str):
+    """
+    Phase 5: Retrieve chunks for a specific PDF
+    """
+    # Debug: Log what we're looking for and what we have
+    print(f"Looking for PDF ID: {pdf_id} (type: {type(pdf_id)})")
+    print(f"Available PDF IDs: {list(pdf_storage.keys())}")
+    
+    if pdf_id not in pdf_storage:
+        raise HTTPException(
+            status_code=404, 
+            detail=f"PDF not found. Available IDs: {list(pdf_storage.keys())}"
+        )
+    
+    pdf_data = pdf_storage[pdf_id]
+    
+    return ChunksResponse(
+        success=True,
+        pdf_id=pdf_id,
+        chunks=pdf_data['chunks'],
+        total_chunks=len(pdf_data['chunks']),
+        message=f"Retrieved {len(pdf_data['chunks'])} chunks"
     )
+
+# ========== PHASE 5: LIST ALL STORED PDFS (DEBUG) ==========
+
+@app.get("/api/pdfs")
+async def list_pdfs():
+    """
+    Debug endpoint: List all PDFs stored in memory
+    """
+    return {
+        "success": True,
+        "total_pdfs": len(pdf_storage),
+        "pdf_ids": list(pdf_storage.keys()),
+        "pdfs": {
+            pdf_id: {
+                "filename": data["filename"],
+                "chunks_count": len(data["chunks"]),
+                "page_count": data["page_count"]
+            }
+            for pdf_id, data in pdf_storage.items()
+        }
+    }
 
 # ========== PHASE 6: EMBEDDINGS (PLACEHOLDER) ==========
 
